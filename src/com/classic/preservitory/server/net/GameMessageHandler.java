@@ -1,0 +1,46 @@
+package com.classic.preservitory.server.net;
+
+import com.classic.preservitory.server.GameServer;
+
+public class GameMessageHandler {
+
+    private final GameServer server;
+
+    public GameMessageHandler(GameServer server) {
+        this.server = server;
+    }
+
+    public void handle(String id, String line) {
+        if (line.isEmpty()) return;
+
+        String[] parts = line.split(" ");
+
+        if (parts.length == 4 && "UPDATE".equals(parts[0])) {
+            server.updatePosition(id,
+                    Integer.parseInt(parts[2]),
+                    Integer.parseInt(parts[3]));
+
+        } else if (parts.length >= 2 && "CHAT".equals(parts[0])) {
+            String msg = line.length() > 5 ? line.substring(5) : "";
+            server.broadcastChat(id, msg);
+
+        } else if (parts.length == 2 && "CHOP".equals(parts[0])) {
+            server.handleChop(id, parts[1]);
+
+        } else if (parts.length == 2 && "MINE".equals(parts[0])) {
+            server.handleMine(id, parts[1]);
+
+        } else if (parts.length >= 2 && "ATTACK".equals(parts[0])) {
+            server.handleAttack(id, parts[1]);
+
+        } else if (parts.length == 2 && "PICKUP".equals(parts[0])) {
+            server.handlePickup(id, parts[1]);
+
+        } else if (parts.length == 2 && "LOGIN".equals(parts[0])) {
+            server.handleLogin(id, parts[1]);
+
+        } else if (parts.length == 2 && "REGISTER".equals(parts[0])) {
+            server.handleRegister(id, parts[1]);
+        }
+    }
+}

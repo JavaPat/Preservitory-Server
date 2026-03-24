@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find C:/Users/Patri/IdeaProjects/Preservitory -name *.java)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -v \"import\\\\|//\")"
+    ]
+  }
+}
