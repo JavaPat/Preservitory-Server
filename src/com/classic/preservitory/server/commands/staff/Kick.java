@@ -3,6 +3,8 @@ package com.classic.preservitory.server.commands.staff;
 import com.classic.preservitory.server.GameServer;
 import com.classic.preservitory.server.commands.Command;
 import com.classic.preservitory.server.moderation.ModerationSystem;
+import com.classic.preservitory.server.moderation.PlayerRole;
+import com.classic.preservitory.server.player.PlayerSession;
 
 public class Kick implements Command {
 
@@ -16,36 +18,39 @@ public class Kick implements Command {
 
     @Override
     public String getName() {
-        return "/kick";
+        return "kick";
+    }
+
+    @Override
+    public PlayerRole getRequiredRole() {
+        return PlayerRole.MODERATOR;
     }
 
     @Override
     public void execute(String senderId, String[] args) {
 
-        if (!moderation.isMod(senderId)) {
-            server.sendToPlayer(senderId, "No permission.");
-            return;
-        }
-
         if (args.length < 2) {
-            server.sendToPlayer(senderId, "Usage: /kick <player>");
+            server.sendToPlayer(senderId, "Usage: ::kick <username>");
             return;
         }
 
-        String target = args[1].toUpperCase();
+        String targetUsername = args[1].trim().toLowerCase();
 
-        boolean success = server.disconnectPlayer(target);
+        PlayerSession targetSession =
+                server.getPlayerService().getSessionByUsername(targetUsername);
 
-        if (!success) {
-            server.sendToPlayer(senderId, "Player not found.");
+        if (targetSession == null) {
+            server.sendToPlayer(senderId, "Player not found or offline.");
             return;
         }
 
-        if (target.equals(senderId)) {
+        if (targetSession.id.equals(senderId)) {
             server.sendToPlayer(senderId, "You cannot kick yourself.");
             return;
         }
 
-        server.broadcastSystem(target + " was kicked by " + senderId);
+        server.disconnectPlayer(targetSession.id);
+
+        server.broadcastSystem(targetSession.username + " was kicked by " + senderId);
     }
 }

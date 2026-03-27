@@ -3,7 +3,8 @@
     "allow": [
       "Bash(find C:/Users/Patri/IdeaProjects/Preservitory -name *.java)",
       "Bash(xargs grep:*)",
-      "Bash(grep -v \"import\\\\|//\")"
+      "Bash(grep -v \"import\\\\|//\")",
+      "Bash(find C:/Users/Patri/IdeaProjects/Preservitory-Server -name *.json -o -name *.dat)"
     ]
   }
 }

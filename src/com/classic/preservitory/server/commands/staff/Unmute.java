@@ -3,6 +3,7 @@ package com.classic.preservitory.server.commands.staff;
 import com.classic.preservitory.server.GameServer;
 import com.classic.preservitory.server.commands.Command;
 import com.classic.preservitory.server.moderation.ModerationSystem;
+import com.classic.preservitory.server.moderation.PlayerRole;
 
 public class Unmute implements Command {
 
@@ -16,27 +17,34 @@ public class Unmute implements Command {
 
     @Override
     public String getName() {
-        return "/unmute";
+        return "unmute";
+    }
+
+    @Override
+    public PlayerRole getRequiredRole() {
+        return PlayerRole.MODERATOR;
     }
 
     @Override
     public void execute(String senderId, String[] args) {
 
-        if (!moderation.isMod(senderId)) {
-            server.sendToPlayer(senderId, "No permission.");
-            return;
-        }
-
         if (args.length < 2) {
-            server.sendToPlayer(senderId, "Usage: /unmute <player>");
+            server.sendToPlayer(senderId, "Usage: ::unmute <username>");
             return;
         }
 
-        String target = args[1];
+        String targetUsername = args[1].trim().toLowerCase();
 
-        moderation.unmutePlayer(target);
+        moderation.unmutePlayer(targetUsername);
 
-        server.sendToPlayer(senderId, "Unmuted " + target);
-        server.sendToPlayer(target, "You are no longer muted.");
+        var targetSession = server.getPlayerService()
+                .getSessionByUsername(targetUsername);
+
+        if (targetSession != null) {
+            server.sendToPlayer(targetSession.id, "You are no longer muted.");
+        }
+
+        server.sendToPlayer(senderId, "Unmuted " + targetUsername + ".");
     }
+
 }

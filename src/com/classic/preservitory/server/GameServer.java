@@ -5,14 +5,18 @@ import com.classic.preservitory.server.commands.CommandManager;
 import com.classic.preservitory.server.commands.staff.Kick;
 import com.classic.preservitory.server.commands.staff.Mute;
 import com.classic.preservitory.server.commands.staff.Unmute;
+import com.classic.preservitory.server.content.NpcDefinition;
 import com.classic.preservitory.server.moderation.ModerationSystem;
 import com.classic.preservitory.server.net.BroadcastService;
 import com.classic.preservitory.server.net.ClientHandler;
+import com.classic.preservitory.server.npc.NPCData;
 import com.classic.preservitory.server.objects.RockData;
 import com.classic.preservitory.server.objects.TreeData;
 import com.classic.preservitory.server.player.PlayerService;
 import com.classic.preservitory.server.player.PlayerSession;
-import com.classic.preservitory.server.util.ValidationUtil;
+import com.classic.preservitory.server.player.ShopSystem;
+import com.classic.preservitory.server.quest.Quest;
+import com.classic.preservitory.util.ValidationUtil;
 import com.classic.preservitory.server.world.EnemyManager;
 import com.classic.preservitory.server.world.GatheringService;
 import com.classic.preservitory.server.world.LootManager;
@@ -26,6 +30,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -34,6 +39,8 @@ public class GameServer {
 
     private static final int PORT = Constants.PORT;
     private static final long LOGIN_PROTECTION_MS = 5_000L;
+    private static final double NPC_INTERACT_RANGE_PX = TreeManager.TILE_SIZE * 1.7;
+    private static final double NPC_INTERACT_RANGE_SQ = NPC_INTERACT_RANGE_PX * NPC_INTERACT_RANGE_PX;
 
     // -----------------------------------------------------------------------
     //  World managers
@@ -78,7 +85,7 @@ public class GameServer {
     // -----------------------------------------------------------------------
 
     private final ModerationSystem moderationSystem = new ModerationSystem();
-    private final CommandManager   commandManager   = new CommandManager();
+    private final CommandManager commandManager = new CommandManager(this);
 
     private void registerCommands() {
         commandManager.register(new Mute(this, moderationSystem));
@@ -96,6 +103,7 @@ public class GameServer {
         registerCommands();
         worldTickService.start();
         playerService.startAutoSaveThread();
+        playerService.startSessionCleanupThread();
 
         while (true) {
             Socket socket = serverSocket.accept();
@@ -123,22 +131,8 @@ public class GameServer {
     // -----------------------------------------------------------------------
 
     public void onConnect(PlayerSession session) {
-        session.hp = session.getMaxHp();
         session.protectedUntilMs = System.currentTimeMillis() + LOGIN_PROTECTION_MS;
-
-        Set<RegionKey> visible = treeManager.getVisibleRegions(session.currentRegion);
-        synchronized (session) {
-            session.loadedRegions.addAll(visible);
-        }
-
-        broadcastService.sendToPlayer(session.id, "PLAYER_HP " + session.hp);
-        session.handler.send(treeManager.buildStateForRegions(visible));
-        session.handler.send(rockManager.buildStateForRegions(visible));
-        session.handler.send(npcManager.buildSnapshot());
-        session.handler.send(enemyManager.buildSnapshot());
-        session.handler.send(lootManager.buildSnapshot());
-        session.handler.send(session.inventory.buildSnapshot());
-        broadcastService.broadcastPositions();
+        syncSessionState(session);
     }
 
     // -----------------------------------------------------------------------
@@ -175,8 +169,12 @@ public class GameServer {
             session.loadedRegions.addAll(newVisible);
         }
 
-        if (!toLoad.isEmpty())   sendRegionLoad(session.handler, toLoad);
-        if (!toUnload.isEmpty()) sendRegionUnload(session.handler, toUnload);
+        ClientHandler handler = session.getHandler();
+
+        if (handler != null) {
+            if (!toLoad.isEmpty())   sendRegionLoad(handler, toLoad);
+            if (!toUnload.isEmpty()) sendRegionUnload(handler, toUnload);
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -212,8 +210,11 @@ public class GameServer {
     public void broadcastChat(String fromId, String message) {
         message = message.trim();
 
-        if (message.startsWith("/")) {
-            if (!commandManager.handle(fromId, message)) {
+        if (message.startsWith("::") || message.startsWith("/")) {
+
+            String command = message.replaceFirst("^[:/]+", "");
+
+            if (!commandManager.handle(fromId, command)) {
                 sendToPlayer(fromId, "Unknown command.");
             }
             return;
@@ -232,8 +233,16 @@ public class GameServer {
         }
         if (result.message != null) sendToPlayer(fromId, result.message);
 
-        System.out.println("[Chat] " + fromId + ": " + clean);
-        broadcastService.broadcastAll("CHAT " + fromId + " " + clean);
+        PlayerSession session = sessions.get(fromId);
+
+        String role = session.getRights().name();
+        String username = session.username;
+
+        System.out.println("CHAT [" + role + "] " + username + ": " + clean);
+
+        broadcastService.broadcastAll(
+                "CHAT " + username + " " + role + " " + clean
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -256,12 +265,158 @@ public class GameServer {
         gatheringService.handlePickup(id, lootId);
     }
 
-    public void handleLogin(String id, String username) {
-        playerService.handleLogin(id, username);
+    public void handleLogin(String id, String username, String password) {
+        if (playerService.handleLogin(id, username, password)) {
+            PlayerSession session = sessions.get(id);
+            if (session != null) {
+                syncSessionState(session);
+            }
+        }
     }
 
-    public void handleRegister(String id, String username) {
-        playerService.handleRegister(id, username);
+    public void handleRegister(String id, String username, String password) {
+        if (playerService.handleRegister(id, username, password)) {
+            PlayerSession session = sessions.get(id);
+            if (session != null) {
+                syncSessionState(session);
+            }
+        }
+    }
+
+    public void handleTalk(String playerId, String npcId) {
+        if (!ValidationUtil.isValidObjectId(npcId)) return;
+
+        PlayerSession session = sessions.get(playerId);
+        if (session == null || !session.isAlive()) return;
+        if (!session.loggedIn) {
+            sendToPlayer(playerId, "Login first with /login <name> or /register <name>.");
+            return;
+        }
+
+        NPCData npc = npcManager.getNpc(npcId);
+        if (npc == null) return;
+        NpcDefinition definition = npcManager.getDefinition(npc.definitionId);
+        if (definition == null) return;
+        if (!ValidationUtil.isWithinEntityRange(session.x, session.y, npc.x, npc.y, NPC_INTERACT_RANGE_SQ)) return;
+
+        session.activeNpcId = npcId;
+        session.shopOpen = false;
+
+        String[] lines;
+        boolean openShop = false;
+
+        if ("getting_started".equals(definition.questId)) {
+            Quest quest = session.questSystem.getGettingStarted();
+            if (quest.getState() == Quest.State.NOT_STARTED) {
+                quest.start();
+            } else if (quest.getState() == Quest.State.IN_PROGRESS && quest.isLogsStepDone()) {
+                quest.complete();
+                if (definition.questRewardCoins > 0) {
+                    session.inventory.addItem("Coins", definition.questRewardCoins);
+                }
+
+                ClientHandler h = session.getHandler();
+                if (h != null) {
+                    h.send(session.inventory.buildSnapshot());
+                }
+
+                broadcastService.sendToPlayer(session.id, "SYSTEM Quest complete: Getting Started.");
+            }
+
+            Quest questState = session.questSystem.getGettingStarted();
+            if (questState.getState() == Quest.State.NOT_STARTED) {
+                lines = definition.dialogueStart.toArray(String[]::new);
+            } else if (questState.getState() == Quest.State.IN_PROGRESS && questState.isLogsStepDone()) {
+                lines = definition.dialogueReadyToComplete.toArray(String[]::new);
+            } else if (questState.getState() == Quest.State.IN_PROGRESS) {
+                lines = definition.dialogueInProgress.toArray(String[]::new);
+            } else {
+                lines = definition.dialogueComplete.toArray(String[]::new);
+            }
+            openShop = questState.getState() == Quest.State.COMPLETE && definition.shopkeeper;
+        } else {
+            List<String> fallback = definition.dialogueComplete.isEmpty()
+                    ? List.of(definition.name + ": Hello there.")
+                    : definition.dialogueComplete;
+            lines = fallback.toArray(String[]::new);
+            openShop = definition.shopkeeper;
+        }
+
+        ClientHandler h = session.getHandler();
+        if (h != null) {
+            h.send(buildDialogueMessage(npcId, lines, openShop));
+        }
+
+        if (openShop) {
+            session.shopOpen = true;
+
+            if (h != null) {
+                h.send(new ShopSystem(definition.stockPrices, definition.sellPrices).buildSnapshot());
+            }
+        }
+    }
+
+    public void handleBuy(String playerId, String itemName) {
+        PlayerSession session = sessions.get(playerId);
+        if (session == null) return;
+        if (!session.loggedIn) {
+            sendToPlayer(playerId, "Login first with /login <name> or /register <name>.");
+            return;
+        }
+        if (!session.shopOpen) return;
+        NPCData npc = session.activeNpcId != null ? npcManager.getNpc(session.activeNpcId) : null;
+        if (npc == null) return;
+        NpcDefinition definition = npcManager.getDefinition(npc.definitionId);
+        if (definition == null) return;
+
+        String error = new ShopSystem(definition.stockPrices, definition.sellPrices)
+                .buyItem(itemName, session.inventory);
+        if (error != null) {
+            sendToPlayer(playerId, error);
+            return;
+        }
+
+        ClientHandler h = session.getHandler();
+        if (h != null) {
+            h.send(session.inventory.buildSnapshot());
+        }
+
+        sendToPlayer(playerId, "Bought " + itemName + ".");
+    }
+
+    public void handleSell(String playerId, String itemName) {
+        PlayerSession session = sessions.get(playerId);
+        if (session == null) return;
+        if (!session.loggedIn) {
+            sendToPlayer(playerId, "Login first with /login <name> or /register <name>.");
+            return;
+        }
+        if (!session.shopOpen) return;
+        NPCData npc = session.activeNpcId != null ? npcManager.getNpc(session.activeNpcId) : null;
+        if (npc == null) return;
+        NpcDefinition definition = npcManager.getDefinition(npc.definitionId);
+        if (definition == null) return;
+
+        String error = new ShopSystem(definition.stockPrices, definition.sellPrices)
+                .sellItem(itemName, session.inventory);
+        if (error != null) {
+            sendToPlayer(playerId, error);
+            return;
+        }
+
+        ClientHandler h = session.getHandler();
+        if (h != null) {
+            h.send(session.inventory.buildSnapshot());
+        }
+
+        sendToPlayer(playerId, "Sold " + itemName + ".");
+    }
+
+    public void handleShopClose(String playerId) {
+        PlayerSession session = sessions.get(playerId);
+        if (session == null) return;
+        session.shopOpen = false;
+        session.activeNpcId = null;
     }
 
     public void removePlayer(String playerId) {
@@ -275,8 +430,11 @@ public class GameServer {
     public boolean disconnectPlayer(String playerId) {
         PlayerSession s = sessions.get(playerId);
         if (s == null) return false;
-        s.handler.send("SYSTEM You have been kicked.");
-        s.handler.disconnect();
+        ClientHandler h = s.getHandler();
+        if (h != null) {
+            h.send("SYSTEM You have been kicked.");
+            h.disconnect();
+        }
         System.out.println("[Server] " + playerId + " was kicked");
         return true;
     }
@@ -290,11 +448,55 @@ public class GameServer {
         broadcastService.broadcastAll("SYSTEM " + message);
     }
 
+    public PlayerService getPlayerService() {
+        return playerService;
+    }
+
     // -----------------------------------------------------------------------
     //  Entry point
     // -----------------------------------------------------------------------
 
     public static void main(String[] args) throws IOException {
         new GameServer().start();
+    }
+
+    private void syncSessionState(PlayerSession session) {
+        RegionKey region = TreeManager.getRegionForPosition(session.x, session.y);
+        Set<RegionKey> visible = treeManager.getVisibleRegions(region);
+
+        synchronized (session) {
+            session.currentRegion = region;
+            session.loadedRegions.clear();
+            session.loadedRegions.addAll(visible);
+            session.clampHp();
+        }
+
+        ClientHandler h = session.getHandler();
+
+        if (h != null) {
+            h.send(treeManager.buildStateForRegions(visible));
+            h.send(rockManager.buildStateForRegions(visible));
+            h.send(npcManager.buildSnapshot());
+            h.send(enemyManager.buildSnapshot());
+            h.send(lootManager.buildSnapshot());
+
+            if (session.loggedIn) {
+                broadcastService.sendToPlayer(session.id, "PLAYER_HP " + session.hp + " " + session.getMaxHp());
+                h.send(session.inventory.buildSnapshot());
+            }
+        }
+
+        broadcastService.broadcastPositions();
+    }
+
+    private String buildDialogueMessage(String npcId, String[] lines, boolean openShop) {
+        StringBuilder sb = new StringBuilder("DIALOGUE\t")
+                .append(npcId).append('\t')
+                .append(openShop ? '1' : '0').append('\t');
+        for (int i = 0; i < lines.length; i++) {
+            if (i > 0) sb.append('|');
+            sb.append(lines[i].replace('|', '/'));
+        }
+        return sb.toString();
     }
 }

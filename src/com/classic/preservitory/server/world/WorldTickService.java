@@ -91,6 +91,7 @@ public class WorldTickService {
                     for (EnemyManager.AttackEvent attack : enemyResult.attacks) {
                         combatServices.damagePlayer(attack.playerId, attack.damage);
                     }
+                    combatServices.handleRespawns();
 
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();

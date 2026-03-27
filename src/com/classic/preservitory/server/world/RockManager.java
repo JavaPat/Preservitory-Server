@@ -1,13 +1,12 @@
 package com.classic.preservitory.server.world;
 
+import com.classic.preservitory.server.content.MapContentLoader;
+import com.classic.preservitory.server.content.ObjectTypeDefinition;
+import com.classic.preservitory.server.content.ObjectTypeLoader;
 import com.classic.preservitory.server.objects.RockData;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.*;
 
 /**
  * Server-authoritative manager for all rocks.
@@ -29,14 +28,6 @@ public class RockManager {
     public static final int REGION_PX    = TILE_SIZE * REGION_TILES; // 256
     public static final int VIEW_RADIUS  = 2;
 
-    private static final long   RESPAWN_DELAY_MS = 8_000L;
-    private static final String MAP_NAME         = "starter_map.json";
-
-    private static final Pattern OBJECT_PATTERN = Pattern.compile("\\{([^{}]*)\\}");
-    private static final Pattern ID_PATTERN     = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"");
-    private static final Pattern X_PATTERN      = Pattern.compile("\"x\"\\s*:\\s*(-?\\d+)");
-    private static final Pattern Y_PATTERN      = Pattern.compile("\"y\"\\s*:\\s*(-?\\d+)");
-
     // -----------------------------------------------------------------------
     //  Storage
     // -----------------------------------------------------------------------
@@ -44,6 +35,7 @@ public class RockManager {
     private final ConcurrentHashMap<String, RockData> allRocks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RegionKey, ConcurrentHashMap<String, RockData>> regionMap
             = new ConcurrentHashMap<>();
+    private final Map<String, ObjectTypeDefinition> definitions = ObjectTypeLoader.loadAll();
 
     // -----------------------------------------------------------------------
     //  Construction
@@ -59,40 +51,20 @@ public class RockManager {
     }
 
     private List<RockData> loadRocksFromMap() {
-        Path mapPath = resolveMapPath();
-        try {
-            String json    = Files.readString(mapPath, StandardCharsets.UTF_8);
-            String objects = extractObjectsArray(json);
+        List<RockData> rocks = new ArrayList<>();
 
-            List<RockData> rocks = new ArrayList<>();
-            Matcher matcher      = OBJECT_PATTERN.matcher(objects);
-            int rockIndex        = 0;
-
-            while (matcher.find()) {
-                String obj = matcher.group(1);
-                String id  = extractString(obj, ID_PATTERN);
-                if (!"rock".equals(id)) continue;
-
-                int x = extractInt(obj, X_PATTERN);
-                int y = extractInt(obj, Y_PATTERN);
-                rocks.add(new RockData("R" + rockIndex++, x, y));
+        for (MapContentLoader.MapObjectSpawn spawn : MapContentLoader.loadObjects()) {
+            ObjectTypeDefinition def = definitions.get(spawn.definitionId());
+            if (def == null || !"rock".equals(def.category)) {
+                continue;
             }
-
-            return rocks;
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to load rocks from " + mapPath, e);
+            rocks.add(new RockData(spawn.id(), spawn.definitionId(), spawn.x(), spawn.y()));
         }
-    }
 
-    private Path resolveMapPath() {
-        List<Path> candidates = List.of(
-                Paths.get("cache", "maps", MAP_NAME),
-                Paths.get("..", "Preservitory", "cache", "maps", MAP_NAME)
-        );
-        for (Path p : candidates) {
-            if (Files.exists(p)) return p;
+        if (rocks.isEmpty()) {
+            throw new IllegalStateException("No rock objects found in starter_map.json");
         }
-        throw new IllegalStateException("Could not find map file " + MAP_NAME);
+        return rocks;
     }
 
     // -----------------------------------------------------------------------
@@ -144,6 +116,7 @@ public class RockManager {
             for (RockData r : getRocksInRegion(key)) {
                 if (!r.alive) continue;
                 sb.append(' ').append(r.id)
+                  .append(' ').append(r.typeId)
                   .append(' ').append(r.x)
                   .append(' ').append(r.y)
                   .append(' ').append(1)
@@ -158,7 +131,7 @@ public class RockManager {
     }
 
     public static String buildAddMessage(RockData r) {
-        return "ROCK_ADD " + r.id + " " + r.x + " " + r.y;
+        return "ROCK_ADD " + r.id + " " + r.typeId + " " + r.x + " " + r.y;
     }
 
     // -----------------------------------------------------------------------
@@ -170,8 +143,9 @@ public class RockManager {
         if (rock == null) return false;
         synchronized (rock) {
             if (!rock.alive) return false;
+            ObjectTypeDefinition def = definitions.get(rock.typeId);
             rock.alive       = false;
-            rock.respawnTime = RESPAWN_DELAY_MS;
+            rock.respawnTime = def != null && def.respawnMs > 0 ? def.respawnMs : 8_000L;
         }
         return true;
     }
@@ -195,32 +169,4 @@ public class RockManager {
         return respawned;
     }
 
-    // -----------------------------------------------------------------------
-    //  JSON helpers
-    // -----------------------------------------------------------------------
-
-    private String extractObjectsArray(String json) {
-        int marker = json.indexOf("\"objects\"");
-        if (marker == -1) throw new IllegalStateException("No 'objects' array in map JSON");
-        int start = json.indexOf('[', marker);
-        if (start == -1) throw new IllegalStateException("'objects' is not an array");
-        int depth = 0;
-        for (int i = start; i < json.length(); i++) {
-            char c = json.charAt(i);
-            if (c == '[') depth++;
-            if (c == ']' && --depth == 0) return json.substring(start + 1, i);
-        }
-        throw new IllegalStateException("'objects' array is unterminated");
-    }
-
-    private String extractString(String obj, Pattern p) {
-        Matcher m = p.matcher(obj);
-        return m.find() ? m.group(1) : null;
-    }
-
-    private int extractInt(String obj, Pattern p) {
-        Matcher m = p.matcher(obj);
-        if (!m.find()) throw new IllegalStateException("Missing numeric field matching " + p.pattern());
-        return Integer.parseInt(m.group(1));
-    }
 }

@@ -1,0 +1,44 @@
+{
+  "username": "pat",
+  "passwordHash": "$2a$12$U9.ePnEqWVDC8czuCWXc4uKD1JQiq0ktqI93g2YnMMNtshSZ9WVMi",
+  "rights": "OWNER",
+  "x": 416,
+  "y": 352,
+  "hp": 5,
+  "questState": "NOT_STARTED",
+  "questLogsChopped": 0,
+  "inventory": {
+  },
+  "skills": {
+    "PRAYER": 1,
+    "WOODCUTTING": 1,
+    "HITPOINTS": 1,
+    "STRENGTH": 1,
+    "SMITHING": 1,
+    "FLETCHING": 1,
+    "DEFENCE": 1,
+    "FISHING": 1,
+    "MAGIC": 1,
+    "COOKING": 1,
+    "CRAFTING": 1,
+    "ATTACK": 1,
+    "MINING": 1,
+    "RANGE": 1
+  },
+  "skillXp": {
+    "PRAYER": 0,
+    "WOODCUTTING": 0,
+    "HITPOINTS": 0,
+    "STRENGTH": 0,
+    "SMITHING": 0,
+    "FLETCHING": 0,
+    "DEFENCE": 0,
+    "FISHING": 0,
+    "MAGIC": 0,
+    "COOKING": 0,
+    "CRAFTING": 0,
+    "ATTACK": 0,
+    "MINING": 0,
+    "RANGE": 0
+  }
+}

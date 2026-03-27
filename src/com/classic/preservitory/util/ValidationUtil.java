@@ -1,4 +1,4 @@
-package com.classic.preservitory.server.util;
+package com.classic.preservitory.util;
 
 import com.classic.preservitory.server.player.ActionType;
 import com.classic.preservitory.server.player.PlayerSession;

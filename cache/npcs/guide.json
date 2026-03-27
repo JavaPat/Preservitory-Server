@@ -1,0 +1,34 @@
+{
+  "id": "guide",
+  "name": "Guide",
+  "shopkeeper": true,
+  "questId": "getting_started",
+  "questRewardCoins": 50,
+  "dialogueStart": [
+    "Welcome to Preservitory, adventurer!",
+    "I'm the town Guide. Let me give you a task.",
+    "Go and chop 3 logs from a nearby tree.",
+    "Return to me with them for a reward!"
+  ],
+  "dialogueInProgress": [
+    "You need to chop 3 logs from a nearby tree.",
+    "Come back once you have them."
+  ],
+  "dialogueReadyToComplete": [
+    "You got the logs! Well done, adventurer!",
+    "As promised, here is your reward."
+  ],
+  "dialogueComplete": [
+    "Welcome back! You've proven yourself.",
+    "Feel free to browse my wares."
+  ],
+  "stockPrices": {
+    "Candle": 5,
+    "Rope": 10,
+    "Gem": 100
+  },
+  "sellPrices": {
+    "Logs": 2,
+    "Ore": 3
+  }
+}

@@ -97,6 +97,7 @@ public class TreePersistence {
             TreeData t = trees.get(i);
             sb.append("  {")
               .append("\"id\":\"").append(t.id).append("\",")
+              .append("\"typeId\":\"").append(t.typeId).append("\",")
               .append("\"x\":").append(t.x).append(",")
               .append("\"y\":").append(t.y).append(",")
               .append("\"alive\":").append(t.alive).append(",")
@@ -126,19 +127,21 @@ public class TreePersistence {
             String obj = json.substring(start + 1, end);
 
             String  id          = extractString (obj, "id");
+            String  typeId      = extractString (obj, "typeId");
             int     x           = extractInt    (obj, "x");
             int     y           = extractInt    (obj, "y");
             boolean alive       = extractBoolean(obj, "alive");
             long    respawnTime = extractLong   (obj, "respawnTime");
 
             if (id != null) {
+                if (typeId == null || typeId.isBlank()) typeId = "tree";
                 // If the respawn timer already expired while the server was down,
                 // bring the tree back immediately.
                 if (!alive && respawnTime > 0 && now >= respawnTime) {
                     alive       = true;
                     respawnTime = 0L;
                 }
-                result.add(new TreeData(id, x, y, alive, respawnTime));
+                result.add(new TreeData(id, typeId, x, y, alive, respawnTime));
             }
 
             i = end + 1;

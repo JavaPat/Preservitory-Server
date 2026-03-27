@@ -3,6 +3,7 @@ package com.classic.preservitory.server.commands.staff;
 import com.classic.preservitory.server.GameServer;
 import com.classic.preservitory.server.commands.Command;
 import com.classic.preservitory.server.moderation.ModerationSystem;
+import com.classic.preservitory.server.moderation.PlayerRole;
 
 public class Mute implements Command {
 
@@ -16,35 +17,44 @@ public class Mute implements Command {
 
     @Override
     public String getName() {
-        return "/mute";
+        return "mute";
+    }
+
+    @Override
+    public PlayerRole getRequiredRole() {
+        return PlayerRole.MODERATOR;
     }
 
     @Override
     public void execute(String senderId, String[] args) {
 
-        if (!moderation.isMod(senderId)) {
-            server.sendToPlayer(senderId, "No permission.");
-            return;
-        }
-
         if (args.length < 3) {
-            server.sendToPlayer(senderId, "Usage: /mute <player> <seconds>");
+            server.sendToPlayer(senderId, "Usage: ::mute <username> <seconds>");
             return;
         }
 
-        String target = args[1];
+        String targetUsername = args[1].trim().toLowerCase();
         int seconds;
 
         try {
             seconds = Integer.parseInt(args[2]);
+            if (seconds <= 0) throw new NumberFormatException();
         } catch (Exception e) {
-            server.sendToPlayer(senderId, "Invalid number.");
+            server.sendToPlayer(senderId, "Invalid duration.");
             return;
         }
 
-        moderation.mutePlayer(target, seconds * 1000L);
+        // ✅ Apply mute (username-based is fine here)
+        moderation.mutePlayer(targetUsername, seconds * 1000L);
 
-        server.sendToPlayer(senderId, "Muted " + target);
-        server.sendToPlayer(target, "You have been muted.");
+        // ✅ Try to find online player
+        var targetSession = server.getPlayerService()
+                .getSessionByUsername(targetUsername);
+
+        if (targetSession != null) {
+            server.sendToPlayer(targetSession.id, "You have been muted for " + seconds + " seconds.");
+        }
+
+        server.sendToPlayer(senderId, "Muted " + targetUsername + " for " + seconds + " seconds.");
     }
 }

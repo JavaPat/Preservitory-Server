@@ -2,7 +2,6 @@ package com.classic.preservitory.server.net;
 
 import com.classic.preservitory.server.player.PlayerSession;
 
-import java.util.ArrayList;
 import java.util.Map;
 
 public class BroadcastService {
@@ -15,8 +14,9 @@ public class BroadcastService {
 
     public void broadcastAll(String message) {
         for (PlayerSession s : sessions.values()) {
-            if (s.handler != null) {
-                s.handler.send(message);
+            ClientHandler h = s.getHandler();
+            if (h != null) {
+                h.send(message);
             }
         }
     }
@@ -26,9 +26,11 @@ public class BroadcastService {
 
         StringBuilder sb = new StringBuilder("PLAYERS");
 
-        for (PlayerSession s : sessions.values()) {
+        for (Map.Entry<String, PlayerSession> entry : sessions.entrySet()) {
+            PlayerSession s = entry.getValue();
+            if (s.disconnected || !s.loggedIn) continue;
             sb.append(' ')
-                    .append(s.id)
+                    .append(entry.getKey())
                     .append(' ')
                     .append(s.x)
                     .append(' ')
@@ -41,8 +43,11 @@ public class BroadcastService {
 
     public void sendToPlayer(String playerId, String message) {
         PlayerSession s = sessions.get(playerId);
-        if (s != null && s.handler != null) {
-            s.handler.send(message);
+        if (s != null) {
+            ClientHandler h = s.getHandler();
+            if (h != null) {
+                h.send(message);
+            }
         }
     }
 }

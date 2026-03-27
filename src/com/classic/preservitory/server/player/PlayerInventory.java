@@ -19,6 +19,26 @@ public class PlayerInventory {
         });
     }
 
+    public int countOf(String name) {
+        if (name == null || name.isBlank()) return 0;
+        return items.getOrDefault(name, 0);
+    }
+
+    public boolean removeItem(String name, int count) {
+        if (name == null || name.isBlank() || count <= 0) return false;
+
+        Integer current = items.get(name);
+        if (current == null || current < count) return false;
+
+        int remaining = current - count;
+        if (remaining == 0) {
+            items.remove(name);
+        } else {
+            items.put(name, remaining);
+        }
+        return true;
+    }
+
     public void clear() {
         items.clear();
     }

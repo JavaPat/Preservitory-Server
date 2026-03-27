@@ -1,12 +1,13 @@
 package com.classic.preservitory.server.world;
 
+import com.classic.preservitory.server.content.MapContentLoader;
+import com.classic.preservitory.server.content.NpcDefinition;
+import com.classic.preservitory.server.content.NpcDefinitionLoader;
+import com.classic.preservitory.server.content.ObjectTypeDefinition;
+import com.classic.preservitory.server.content.ObjectTypeLoader;
 import com.classic.preservitory.server.npc.NPCData;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
 import java.util.*;
-import java.util.regex.*;
 
 /**
  * Loads stationary NPCs from {@code starter_map.json} and builds the
@@ -20,20 +21,12 @@ import java.util.regex.*;
  */
 public class NPCManager {
 
-    private static final String MAP_NAME = "starter_map.json";
     private static final int TILE_SIZE = 32;
-    private static final int GUIDE_SAFE_X = 19 * TILE_SIZE;
-    private static final int GUIDE_SAFE_Y = 10 * TILE_SIZE;
-
-    private static final Pattern OBJECT_PATTERN     = Pattern.compile("\\{([^{}]*)\\}");
-    private static final Pattern ID_PATTERN         = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"");
-    private static final Pattern X_PATTERN          = Pattern.compile("\"x\"\\s*:\\s*(-?\\d+)");
-    private static final Pattern Y_PATTERN          = Pattern.compile("\"y\"\\s*:\\s*(-?\\d+)");
-    private static final Pattern NAME_PATTERN       = Pattern.compile("\"name\"\\s*:\\s*\"([^\"]+)\"");
-    private static final Pattern SHOPKEEPER_PATTERN = Pattern.compile("\"shopkeeper\"\\s*:\\s*(true|false)");
 
     /** Insertion-order map so snapshot entries are always in a stable sequence. */
     private final LinkedHashMap<String, NPCData> npcs = new LinkedHashMap<>();
+    private final Map<String, NpcDefinition> definitions = NpcDefinitionLoader.loadAll();
+    private final Map<String, ObjectTypeDefinition> objectDefinitions = ObjectTypeLoader.loadAll();
 
     // -----------------------------------------------------------------------
     //  Construction
@@ -45,31 +38,24 @@ public class NPCManager {
     }
 
     private void loadFromMap() {
-        Path mapPath = resolveMapPath();
-        try {
-            String json     = Files.readString(mapPath, StandardCharsets.UTF_8);
-            Set<String> blockedTiles = loadBlockedTreeTiles(json);
-            String npcArray = extractNamedArray(json, "npcs");
-            if (npcArray == null) return;
+        Set<String> blockedTiles = loadBlockedTreeTiles();
 
-            Matcher m = OBJECT_PATTERN.matcher(npcArray);
-            while (m.find()) {
-                String obj        = m.group(1);
-                String id         = extractString(obj, ID_PATTERN);
-                String name       = extractString(obj, NAME_PATTERN);
-                if (id == null || name == null) continue;
-
-                int     x          = extractInt(obj, X_PATTERN);
-                int     y          = extractInt(obj, Y_PATTERN);
-                String  skStr      = extractString(obj, SHOPKEEPER_PATTERN);
-                boolean shopkeeper = "true".equals(skStr);
-                int[]   resolved   = resolveNpcPosition(id, x, y, blockedTiles);
-
-                blockedTiles.add(tileKey(resolved[0], resolved[1]));
-                npcs.put(id, new NPCData(id, resolved[0], resolved[1], name, shopkeeper));
+        for (MapContentLoader.MapNpcSpawn spawn : MapContentLoader.loadNpcs()) {
+            NpcDefinition definition = definitions.get(spawn.definitionId());
+            if (definition == null) {
+                continue;
             }
-        } catch (IOException e) {
-            System.err.println("[NPCManager] Could not load NPCs: " + e.getMessage());
+
+            int[] resolved = resolveNpcPosition(spawn.x(), spawn.y(), blockedTiles);
+            blockedTiles.add(tileKey(resolved[0], resolved[1]));
+            npcs.put(spawn.id(), new NPCData(
+                    spawn.id(),
+                    spawn.definitionId(),
+                    resolved[0],
+                    resolved[1],
+                    definition.name,
+                    definition.shopkeeper
+            ));
         }
     }
 
@@ -98,74 +84,26 @@ public class NPCManager {
         return sb.toString();
     }
 
-    // -----------------------------------------------------------------------
-    //  Path resolution — same candidates used by TreeManager / RockManager
-    // -----------------------------------------------------------------------
-
-    private Path resolveMapPath() {
-        List<Path> candidates = List.of(
-                Paths.get("cache", "maps", MAP_NAME),
-                Paths.get("..", "Preservitory", "cache", "maps", MAP_NAME)
-        );
-        for (Path p : candidates) {
-            if (Files.exists(p)) return p;
-        }
-        throw new IllegalStateException("[NPCManager] Cannot find " + MAP_NAME);
+    public NPCData getNpc(String id) {
+        return npcs.get(id);
     }
 
-    // -----------------------------------------------------------------------
-    //  JSON helpers
-    // -----------------------------------------------------------------------
-
-    private String extractNamedArray(String json, String arrayName) {
-        int marker = json.indexOf("\"" + arrayName + "\"");
-        if (marker == -1) return null;
-        int start = json.indexOf('[', marker);
-        if (start == -1) return null;
-        int depth = 0;
-        for (int i = start; i < json.length(); i++) {
-            char c = json.charAt(i);
-            if (c == '[') depth++;
-            if (c == ']' && --depth == 0) return json.substring(start + 1, i);
-        }
-        return null;
+    public NpcDefinition getDefinition(String definitionId) {
+        return definitions.get(definitionId);
     }
 
-    private String extractString(String obj, Pattern p) {
-        Matcher m = p.matcher(obj);
-        return m.find() ? m.group(1) : null;
-    }
-
-    private int extractInt(String obj, Pattern p) {
-        Matcher m = p.matcher(obj);
-        if (!m.find()) throw new IllegalStateException(
-                "Missing numeric field matching " + p.pattern());
-        return Integer.parseInt(m.group(1));
-    }
-
-    private Set<String> loadBlockedTreeTiles(String json) {
+    private Set<String> loadBlockedTreeTiles() {
         Set<String> blocked = new HashSet<>();
-        String objectArray = extractNamedArray(json, "objects");
-        if (objectArray == null) return blocked;
-
-        Matcher m = OBJECT_PATTERN.matcher(objectArray);
-        while (m.find()) {
-            String obj = m.group(1);
-            String id = extractString(obj, ID_PATTERN);
-            if (!"tree".equals(id)) continue;
-
-            int x = extractInt(obj, X_PATTERN);
-            int y = extractInt(obj, Y_PATTERN);
-            blocked.add(tileKey(x, y));
+        for (MapContentLoader.MapObjectSpawn spawn : MapContentLoader.loadObjects()) {
+            ObjectTypeDefinition def = objectDefinitions.get(spawn.definitionId());
+            if (def != null && def.category.equals("tree")) {
+                blocked.add(tileKey(spawn.x(), spawn.y()));
+            }
         }
         return blocked;
     }
 
-    private int[] resolveNpcPosition(String id, int x, int y, Set<String> blockedTiles) {
-        if ("guide".equals(id)) {
-            return new int[]{GUIDE_SAFE_X, GUIDE_SAFE_Y};
-        }
-
+    private int[] resolveNpcPosition(int x, int y, Set<String> blockedTiles) {
         if (!blockedTiles.contains(tileKey(x, y))) {
             return new int[]{x, y};
         }

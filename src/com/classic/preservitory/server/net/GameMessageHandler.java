@@ -36,11 +36,23 @@ public class GameMessageHandler {
         } else if (parts.length == 2 && "PICKUP".equals(parts[0])) {
             server.handlePickup(id, parts[1]);
 
-        } else if (parts.length == 2 && "LOGIN".equals(parts[0])) {
-            server.handleLogin(id, parts[1]);
+        } else if (parts.length == 3 && "LOGIN".equals(parts[0])) {
+            server.handleLogin(id, parts[1], parts[2]);
 
-        } else if (parts.length == 2 && "REGISTER".equals(parts[0])) {
-            server.handleRegister(id, parts[1]);
+        } else if (parts.length == 3 && "REGISTER".equals(parts[0])) {
+            server.handleRegister(id, parts[1], parts[2]);
+
+        } else if (parts.length == 2 && "TALK".equals(parts[0])) {
+            server.handleTalk(id, parts[1]);
+
+        } else if (parts.length >= 2 && "BUY".equals(parts[0])) {
+            server.handleBuy(id, line.substring(4).trim());
+
+        } else if (parts.length >= 2 && "SELL".equals(parts[0])) {
+            server.handleSell(id, line.substring(5).trim());
+
+        } else if ("SHOP_CLOSE".equals(parts[0])) {
+            server.handleShopClose(id);
         }
     }
 }

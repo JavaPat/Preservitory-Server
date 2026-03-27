@@ -1,15 +1,11 @@
 package com.classic.preservitory.server.world;
 
+import com.classic.preservitory.server.content.MapContentLoader;
+import com.classic.preservitory.server.content.ObjectTypeDefinition;
+import com.classic.preservitory.server.content.ObjectTypeLoader;
 import com.classic.preservitory.server.objects.TreeData;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class TreeManager {
@@ -23,13 +19,6 @@ public class TreeManager {
     public static final int REGION_PX    = TILE_SIZE * REGION_TILES; // 256
     public static final int VIEW_RADIUS  = 2;
 
-    private static final long RESPAWN_DELAY_MS = 12_000L;
-    private static final String MAP_NAME = "starter_map.json";
-    private static final Pattern OBJECT_PATTERN = Pattern.compile("\\{([^{}]*)\\}");
-    private static final Pattern ID_PATTERN = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"");
-    private static final Pattern X_PATTERN = Pattern.compile("\"x\"\\s*:\\s*(-?\\d+)");
-    private static final Pattern Y_PATTERN = Pattern.compile("\"y\"\\s*:\\s*(-?\\d+)");
-
     // -----------------------------------------------------------------------
     //  Storage
     // -----------------------------------------------------------------------
@@ -39,6 +28,7 @@ public class TreeManager {
             = new ConcurrentHashMap<>();
 
     private final TreePersistence persistence = new TreePersistence();
+    private final Map<String, ObjectTypeDefinition> definitions = ObjectTypeLoader.loadAll();
 
     // -----------------------------------------------------------------------
     //  Construction — load from map JSON
@@ -56,88 +46,20 @@ public class TreeManager {
     }
 
     private List<TreeData> loadTreesFromMap() {
-        Path mapPath = resolveMapPath();
-        try {
-            String json = Files.readString(mapPath, StandardCharsets.UTF_8);
-            String objects = extractObjectsArray(json);
+        List<TreeData> trees = new ArrayList<>();
 
-            List<TreeData> trees = new ArrayList<>();
-            Matcher matcher = OBJECT_PATTERN.matcher(objects);
-            int treeIndex = 0;
-
-            while (matcher.find()) {
-                String object = matcher.group(1);
-                String id = extractString(object, ID_PATTERN);
-                if (!"tree".equals(id)) continue;
-
-                int x = extractInt(object, X_PATTERN);
-                int y = extractInt(object, Y_PATTERN);
-                trees.add(new TreeData("T" + treeIndex++, x, y));
+        for (MapContentLoader.MapObjectSpawn spawn : MapContentLoader.loadObjects()) {
+            ObjectTypeDefinition def = definitions.get(spawn.definitionId());
+            if (def == null || !"tree".equals(def.category)) {
+                continue;
             }
-
-            if (trees.isEmpty()) {
-                throw new IllegalStateException("No tree objects found in " + mapPath);
-            }
-
-            return trees;
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to load trees from " + mapPath, e);
-        }
-    }
-
-    private Path resolveMapPath() {
-        List<Path> candidates = List.of(
-                Paths.get("cache", "maps", MAP_NAME),
-                Paths.get("..", "Preservitory", "cache", "maps", MAP_NAME)
-        );
-
-        for (Path candidate : candidates) {
-            if (Files.exists(candidate)) {
-                return candidate;
-            }
+            trees.add(new TreeData(spawn.id(), spawn.definitionId(), spawn.x(), spawn.y()));
         }
 
-        throw new IllegalStateException("Could not find map file " + MAP_NAME);
-    }
-
-    private String extractObjectsArray(String json) {
-        String marker = "\"objects\"";
-        int markerIndex = json.indexOf(marker);
-        if (markerIndex == -1) {
-            throw new IllegalStateException("Map JSON is missing objects array");
+        if (trees.isEmpty()) {
+            throw new IllegalStateException("No tree objects found in starter_map.json");
         }
-
-        int arrayStart = json.indexOf('[', markerIndex);
-        if (arrayStart == -1) {
-            throw new IllegalStateException("Map JSON objects entry is not an array");
-        }
-
-        int depth = 0;
-        for (int i = arrayStart; i < json.length(); i++) {
-            char c = json.charAt(i);
-            if (c == '[') depth++;
-            if (c == ']') {
-                depth--;
-                if (depth == 0) {
-                    return json.substring(arrayStart + 1, i);
-                }
-            }
-        }
-
-        throw new IllegalStateException("Map JSON objects array is unterminated");
-    }
-
-    private String extractString(String object, Pattern pattern) {
-        Matcher matcher = pattern.matcher(object);
-        return matcher.find() ? matcher.group(1) : null;
-    }
-
-    private int extractInt(String object, Pattern pattern) {
-        Matcher matcher = pattern.matcher(object);
-        if (!matcher.find()) {
-            throw new IllegalStateException("Missing numeric field in object: {" + object + "}");
-        }
-        return Integer.parseInt(matcher.group(1));
+        return trees;
     }
 
     // -----------------------------------------------------------------------
@@ -189,6 +111,7 @@ public class TreeManager {
             for (TreeData t : getTreesInRegion(key)) {
                 if (!t.alive) continue;
                 sb.append(' ').append(t.id)
+                  .append(' ').append(t.typeId)
                   .append(' ').append(t.x)
                   .append(' ').append(t.y)
                   .append(' ').append(1)
@@ -203,7 +126,7 @@ public class TreeManager {
     }
 
     public static String buildAddMessage(TreeData t) {
-        return "TREE_ADD " + t.id + " " + t.x + " " + t.y;
+        return "TREE_ADD " + t.id + " " + t.typeId + " " + t.x + " " + t.y;
     }
 
     // -----------------------------------------------------------------------
@@ -215,8 +138,9 @@ public class TreeManager {
         if (tree == null) return false;
         synchronized (tree) {
             if (!tree.alive) return false;
+            ObjectTypeDefinition def = definitions.get(tree.typeId);
             tree.alive       = false;
-            tree.respawnTime = RESPAWN_DELAY_MS;
+            tree.respawnTime = def != null && def.respawnMs > 0 ? def.respawnMs : 12_000L;
         }
         persistence.saveAllTrees(allTrees);
         return true;

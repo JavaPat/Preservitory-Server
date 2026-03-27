@@ -1,13 +1,15 @@
 package com.classic.preservitory.server.world;
 
 import com.classic.preservitory.server.net.BroadcastService;
+import com.classic.preservitory.server.net.ClientHandler;
 import com.classic.preservitory.server.objects.LootData;
 import com.classic.preservitory.server.objects.RockData;
 import com.classic.preservitory.server.objects.TreeData;
 import com.classic.preservitory.server.player.ActionType;
 import com.classic.preservitory.server.player.PlayerSession;
 import com.classic.preservitory.server.player.skills.Skill;
-import com.classic.preservitory.server.util.ValidationUtil;
+import com.classic.preservitory.server.player.skills.SkillService;
+import com.classic.preservitory.util.ValidationUtil;
 
 import java.util.Map;
 
@@ -39,7 +41,11 @@ public class GatheringService {
 
     public void handlePickup(String playerId, String lootId) {
         PlayerSession session = sessions.get(playerId);
-        if (session == null || !session.loggedIn || !session.isAlive()) return;
+        if (session == null || !session.isAlive()) return;
+        if (!session.loggedIn) {
+            broadcastService.sendToPlayer(playerId, "SYSTEM Login first with /login <name> or /register <name>.");
+            return;
+        }
         if (!ValidationUtil.isValidObjectId(lootId)) return;
         if (!ValidationUtil.consumeCooldown(session, ActionType.PICKUP, PICKUP_COOLDOWN_MS)) return;
 
@@ -60,7 +66,11 @@ public class GatheringService {
     public void handleMine(String playerId, String rockId) {
         if (!ValidationUtil.isValidObjectId(rockId)) return;
         PlayerSession session = sessions.get(playerId);
-        if (session == null || !session.loggedIn || !session.isAlive()) return;
+        if (session == null || !session.isAlive()) return;
+        if (!session.loggedIn) {
+            broadcastService.sendToPlayer(playerId, "SYSTEM Login first with /login <name> or /register <name>.");
+            return;
+        }
         if (!ValidationUtil.consumeCooldown(session, ActionType.MINE, MINE_COOLDOWN_MS)) return;
 
         RockData rock = rockManager.getRock(rockId);
@@ -69,9 +79,18 @@ public class GatheringService {
 
         if (!rockManager.mineRock(rockId)) return;
 
-        session.inventory.addItem("Ore", 1);
-        session.handler.send(session.inventory.buildSnapshot());
-        session.skills.addXp(Skill.MINING, MINE_XP);
+        ClientHandler h = session.getHandler();
+        if (h != null) {
+            session.inventory.addItem("Ore", 1);
+            h.send(session.inventory.buildSnapshot());
+
+            session.skills.addXp(Skill.MINING, MINE_XP);
+            h.send(SkillService.buildSkillsPacket(session));
+        } else {
+            session.inventory.addItem("Ore", 1);
+            session.skills.addXp(Skill.MINING, MINE_XP);
+        }
+
         broadcastService.sendToPlayer(session.id, "SKILL_XP mining " + MINE_XP);
 
         System.out.println("[Server] Rock mined: " + rockId + " -> respawn in 8000ms");
@@ -87,7 +106,11 @@ public class GatheringService {
     public void handleChop(String playerId, String treeId) {
         if (!ValidationUtil.isValidObjectId(treeId)) return;
         PlayerSession session = sessions.get(playerId);
-        if (session == null || !session.loggedIn || !session.isAlive()) return;
+        if (session == null || !session.isAlive()) return;
+        if (!session.loggedIn) {
+            broadcastService.sendToPlayer(playerId, "SYSTEM Login first with /login <name> or /register <name>.");
+            return;
+        }
         if (!ValidationUtil.consumeCooldown(session, ActionType.CHOP, CHOP_COOLDOWN_MS)) return;
 
         TreeData tree = treeManager.getTree(treeId);
@@ -97,9 +120,21 @@ public class GatheringService {
         if (!treeManager.chopTree(treeId)) return;
 
         session.inventory.addItem("Logs", 1);
-        session.handler.send(session.inventory.buildSnapshot());
+
+        ClientHandler h = session.getHandler();
+
+        if (h != null) {
+            h.send(session.inventory.buildSnapshot());
+        }
+
         session.skills.addXp(Skill.WOODCUTTING, CHOP_XP);
+        session.questSystem.onLogChopped();
+
         broadcastService.sendToPlayer(session.id, "SKILL_XP woodcutting " + CHOP_XP);
+
+        if (h != null) {
+            h.send(SkillService.buildSkillsPacket(session));
+        }
 
         System.out.println("[Server] Tree chopped: " + treeId);
         RegionKey region = TreeManager.getRegionForPosition(tree.x, tree.y);
