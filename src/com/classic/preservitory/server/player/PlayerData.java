@@ -16,11 +16,21 @@ public class PlayerData implements Serializable {
     public int x, y;
     public int hp;
 
-    public Map<String, Integer> inventory = new HashMap<>();
-    public Map<String, Integer> skills = new HashMap<>();
-    public Map<String, Integer> skillXp = new HashMap<>();
-    public String questState = "NOT_STARTED";
-    public int questLogsChopped = 0;
+    public Map<String, Integer> inventory  = new HashMap<>();
+    public Map<String, Integer> skills     = new HashMap<>();
+    public Map<String, Integer> skillXp   = new HashMap<>();
+    /** Equipment slot name → itemId. e.g. {"WEAPON": 1004} */
+    public Map<String, Integer> equipment  = new HashMap<>();
+
+    /**
+     * Quest progress: questId (as string) → QuestState name.
+     * e.g. {"1": "IN_PROGRESS"}
+     */
+    public Map<String, String> quests = new HashMap<>();
+
+    // Legacy fields — kept only for migrating old save files. Do not write to these.
+    public String questState      = null;
+    public int    questLogsChopped = 0;
 
     public PlayerData(String username) {
         this.username = username;

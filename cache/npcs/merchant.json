@@ -1,19 +1,7 @@
 {
-  "id": "merchant",
+  "id": 2,
   "name": "Merchant",
   "shopkeeper": true,
-  "dialogueComplete": [
-    "Merchant: Supplies for woodcutters and miners.",
-    "Merchant: Buy what you need or sell what you've gathered."
-  ],
-  "stockPrices": {
-    "Bronze Axe": 40,
-    "Bronze Pickaxe": 40,
-    "Lobster": 25
-  },
-  "sellPrices": {
-    "Logs": 3,
-    "Ore": 6,
-    "Coins": 1
-  }
+  "wander": false,
+  "shopId": "merchant_shop"
 }

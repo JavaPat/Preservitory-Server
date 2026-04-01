@@ -1,0 +1,17 @@
+{
+  "id": 1,
+  "name": "Goblin",
+  "maxHp": 10,
+  "attack": 1,
+  "defense": 2,
+  "minDamage": 1,
+  "maxDamage": 3,
+  "attackCooldownMs": 2000,
+  "respawnDelayMs": 15000,
+  "wander": true,
+  "wanderRadius": 3,
+  "dropTable": [
+    { "itemId": 1, "chance": 1.0, "minAmount": 3, "maxAmount": 15 },
+    { "itemId": 2, "chance": 0.25, "minAmount": 1, "maxAmount": 1 }
+  ]
+}

@@ -1,9 +1,9 @@
 package com.classic.preservitory.server.world;
 
-import com.classic.preservitory.server.content.MapContentLoader;
-import com.classic.preservitory.server.content.ObjectTypeDefinition;
-import com.classic.preservitory.server.content.ObjectTypeLoader;
+import com.classic.preservitory.server.definitions.ObjectDefinition;
+import com.classic.preservitory.server.definitions.ObjectDefinitionManager;
 import com.classic.preservitory.server.objects.RockData;
+import com.classic.preservitory.server.spawns.SpawnEntry;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -35,36 +35,23 @@ public class RockManager {
     private final ConcurrentHashMap<String, RockData> allRocks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RegionKey, ConcurrentHashMap<String, RockData>> regionMap
             = new ConcurrentHashMap<>();
-    private final Map<String, ObjectTypeDefinition> definitions = ObjectTypeLoader.loadAll();
 
     // -----------------------------------------------------------------------
     //  Construction
     // -----------------------------------------------------------------------
 
-    public RockManager() {
-        List<RockData> mapRocks = loadRocksFromMap();
-        for (RockData r : mapRocks) {
+    public RockManager(List<SpawnEntry> objectSpawns) {
+        for (SpawnEntry spawn : objectSpawns) {
+            ObjectDefinition def = ObjectDefinitionManager.get(spawn.definitionId);
+            if (def.type != ObjectDefinition.Type.ROCK) continue;
+            RockData r = new RockData(spawn.id, def.key, def.id, spawn.x, spawn.y);
             allRocks.put(r.id, r);
             bucketFor(r.x, r.y).put(r.id, r);
         }
-        System.out.println("[RockManager] Loaded " + allRocks.size() + " rocks from map.");
-    }
-
-    private List<RockData> loadRocksFromMap() {
-        List<RockData> rocks = new ArrayList<>();
-
-        for (MapContentLoader.MapObjectSpawn spawn : MapContentLoader.loadObjects()) {
-            ObjectTypeDefinition def = definitions.get(spawn.definitionId());
-            if (def == null || !"rock".equals(def.category)) {
-                continue;
-            }
-            rocks.add(new RockData(spawn.id(), spawn.definitionId(), spawn.x(), spawn.y()));
+        if (allRocks.isEmpty()) {
+            throw new IllegalStateException("No rock spawns found in cache/spawns/objects.json.");
         }
-
-        if (rocks.isEmpty()) {
-            throw new IllegalStateException("No rock objects found in starter_map.json");
-        }
-        return rocks;
+        System.out.println("[RockManager] Loaded " + allRocks.size() + " rocks.");
     }
 
     // -----------------------------------------------------------------------
@@ -143,9 +130,9 @@ public class RockManager {
         if (rock == null) return false;
         synchronized (rock) {
             if (!rock.alive) return false;
-            ObjectTypeDefinition def = definitions.get(rock.typeId);
+            ObjectDefinition def = ObjectDefinitionManager.get(rock.definitionId);
             rock.alive       = false;
-            rock.respawnTime = def != null && def.respawnMs > 0 ? def.respawnMs : 8_000L;
+            rock.respawnTime = def.respawnMs > 0 ? def.respawnMs : 8_000L;
         }
         return true;
     }

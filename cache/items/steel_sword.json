@@ -1,0 +1,10 @@
+{
+  "id": 108,
+  "name": "Steel Sword",
+  "value": 400,
+  "stackable": false,
+  "tradable": true,
+  "equipSlot": "WEAPON",
+  "attackBonus": 10,
+  "strengthBonus": 7
+}

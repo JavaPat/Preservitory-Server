@@ -1,0 +1,9 @@
+{
+  "id": 7,
+  "name": "Runite Rock",
+  "type": "ROCK",
+  "resourceItemId": 3,
+  "xp": 85,
+  "respawnMs": 50000,
+  "spriteKey": "runite_rock"
+}

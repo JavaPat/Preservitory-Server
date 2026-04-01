@@ -4,7 +4,28 @@
       "Bash(find C:/Users/Patri/IdeaProjects/Preservitory -name *.java)",
       "Bash(xargs grep:*)",
       "Bash(grep -v \"import\\\\|//\")",
-      "Bash(find C:/Users/Patri/IdeaProjects/Preservitory-Server -name *.json -o -name *.dat)"
+      "Bash(find C:/Users/Patri/IdeaProjects/Preservitory-Server -name *.json -o -name *.dat)",
+      "Bash(mkdir -p \"C:/Users/Patri/IdeaProjects/Preservitory-Server/cache/spawns\")",
+      "Bash(mkdir -p \"C:/Users/Patri/IdeaProjects/Preservitory-Server/src/com/classic/preservitory/server/spawns\")",
+      "Bash(grep -n \"\"\"E\"\"\\\\s*+\\\\s*i\\\\|\"\"T\"\"\\\\s*+\\\\s*count\\\\|\"\"R\"\"\\\\s*+\\\\s*count\\\\|\"\"NPC_\"\"\\\\s*+\\\\s*i\" \"C:/Users/Patri/IdeaProjects/Preservitory-Server/src/com/classic/preservitory/server/world/EnemyManager.java\" \"C:/Users/Patri/IdeaProjects/Preservitory-Server/src/com/classic/preservitory/server/world/NPCManager.java\" \"C:/Users/Patri/IdeaProjects/Preservitory-Server/src/com/classic/preservitory/server/world/TreeManager.java\" \"C:/Users/Patri/IdeaProjects/Preservitory-Server/src/com/classic/preservitory/server/world/RockManager.java\")",
+      "Bash(del:*)",
+      "Bash(find C:UsersPatriIdeaProjectsPreservitory -name *GamePanel* -o -name *GameScreen*)",
+      "Bash(find C:UsersPatriIdeaProjectsPreservitory-Serversrc -type f -name *[Cc]ombat* -o -name *[Aa]ttack* -o -name *[Dd]amage* -o -name *[Hh]ealth* -o -name *[Ff]ight* -o -name *[Ee]nemy* -o -name *[Ll]oot*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(grep -E \"\\\\.\\(java\\)$\")",
+      "Bash(find /c/Users/Patri/IdeaProjects/Preservitory -name *.java)",
+      "Bash(find C:UsersPatriIdeaProjectsPreservitorysrc -name *.java)",
+      "Bash(find C:UsersPatriIdeaProjectsPreservitory -type f -name *.java)",
+      "Bash(find C:/Users/Patri/IdeaProjects/Preservitory/src -name *.java)",
+      "Bash(find C:/Users/Patri/IdeaProjects/Preservitory/src/com/classic/preservitory/world -name *.java)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//c/Users/Patri/IdeaProjects/Preservitory-Server/**)",
+      "Bash(done)",
+      "Bash(xargs cat:*)",
+      "Bash(/dev/null echo:*)",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }

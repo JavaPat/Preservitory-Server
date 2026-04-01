@@ -1,11 +1,15 @@
 package com.classic.preservitory.server.player;
 
+import com.classic.preservitory.server.definitions.ItemDefinition;
+import com.classic.preservitory.server.definitions.ItemDefinitionManager;
 import com.classic.preservitory.server.moderation.PlayerRole;
 import com.classic.preservitory.server.net.BroadcastService;
 import com.classic.preservitory.server.net.ClientHandler;
 import com.classic.preservitory.server.player.skills.Skill;
 import com.classic.preservitory.server.player.skills.SkillService;
-import com.classic.preservitory.server.quest.Quest;
+import com.classic.preservitory.server.quest.QuestProgress;
+import com.classic.preservitory.server.quest.QuestService;
+import com.classic.preservitory.server.quest.QuestState;
 
 import java.util.Map;
 
@@ -43,11 +47,15 @@ public class PlayerService {
         data.passwordHash = PasswordUtil.hash(password);
         data.x = PlayerSession.PLAYER_SPAWN_X;
         data.y = PlayerSession.PLAYER_SPAWN_Y;
+        // Combat skills start at level 3 (OSRS convention); others at level 1.
+        int combatStartXp = com.classic.preservitory.server.player.skills.SkillSet.xpForLevel(3);
         for (Skill skill : Skill.values()) {
-            data.skills.put(skill.name(), 1);
-            data.skillXp.put(skill.name(), 0);
+            boolean isCombat = skill == Skill.ATTACK || skill == Skill.STRENGTH
+                    || skill == Skill.DEFENCE || skill == Skill.HITPOINTS;
+            data.skills.put(skill.name(), isCombat ? 3 : 1);
+            data.skillXp.put(skill.name(), isCombat ? combatStartXp : 0);
         }
-        data.hp = 5;
+        data.hp = 15; // level 3 HITPOINTS × 5
 
         PlayerSaveSystem.save(data);
         return handleLogin(tempId, username, password);
@@ -98,7 +106,7 @@ public class PlayerService {
             long elapsed = System.currentTimeMillis() - existing.disconnectTime;
 
             if (elapsed <= 30_000) {
-                System.out.println("[Auth] Reconnecting session: " + username);
+                System.out.println("[PlayerService] Reconnecting session: " + username);
 
                 String oldId = getSessionId(existing);
 
@@ -148,31 +156,65 @@ public class PlayerService {
             } catch (Exception ignored) {}
         }
 
-        try {
-            session.questSystem.getGettingStarted()
-                    .setState(Quest.State.valueOf(data.questState));
-        } catch (Exception ignored) {
-            session.questSystem.getGettingStarted().setState(Quest.State.NOT_STARTED);
+        // Load quest progress from save data
+        session.quests.clear();
+        for (var entry : data.quests.entrySet()) {
+            try {
+                int questId = Integer.parseInt(entry.getKey());
+                QuestProgress progress = QuestProgress.deserialize(entry.getValue());
+                if (progress.state != QuestState.NOT_STARTED) {
+                    session.quests.put(questId, progress);
+                }
+            } catch (Exception ignored) {}
         }
-        session.questSystem.getGettingStarted().setLogsChopped(data.questLogsChopped);
+        // Migrate legacy quest data (old saves only — before quests map was persisted)
+        if (data.quests.isEmpty() && data.questState != null) {
+            try {
+                QuestState legacyState = switch (data.questState) {
+                    case "COMPLETE", "COMPLETED" -> QuestState.COMPLETED;
+                    case "IN_PROGRESS"           -> QuestState.IN_PROGRESS;
+                    default                      -> null;
+                };
+                if (legacyState != null) {
+                    session.quests.put(1, new QuestProgress(legacyState, 0)); // quest id 1 = guide_quest
+                }
+            } catch (Exception ignored) {}
+        }
 
         // ✅ THEN apply HP correctly
         session.hp = data.hp;
         session.clampHp(); // 🔥 critical fix
 
-        // Inventory
+        // Inventory — PlayerData stores itemId as String (JSON key); Inventory uses int.
         session.inventory.clear();
         for (var entry : data.inventory.entrySet()) {
-            session.inventory.addItem(entry.getKey(), entry.getValue());
+            try {
+                session.inventory.addItem(Integer.parseInt(entry.getKey()), entry.getValue());
+            } catch (NumberFormatException ignored) {
+                System.err.println("[PlayerService] Skipping invalid inventory key '" + entry.getKey()
+                        + "' for player " + username);
+            }
+        }
+
+        // Load equipment
+        session.equipment.clear();
+        for (var entry : data.equipment.entrySet()) {
+            EquipSlot slot = EquipSlot.fromString(entry.getKey());
+            if (slot != null && ItemDefinitionManager.exists(entry.getValue())) {
+                session.equipment.equip(slot, entry.getValue());
+            }
         }
 
         // ✅ Send state to client
         ClientHandler h = session.getHandler();
         if (h != null) {
             h.send(session.inventory.buildSnapshot());
+            h.send(session.equipment.buildSnapshot());
             h.send(SkillService.buildSkillsPacket(session));
             h.send("PLAYER_HP " + session.hp + " " + session.getMaxHp());
             h.send("AUTH_OK " + username);
+            // Send quest state immediately so the journal is populated without a quest action
+            h.send(QuestService.buildQuestLogPacket(session));
         }
 
         sendToPlayer(tempId, "Welcome back, " + username + "!");
@@ -190,11 +232,15 @@ public class PlayerService {
         if (session != null && session.loggedIn && session.username != null) {
             savePlayer(session);
 
-            // 🔥 NEW: mark as disconnected instead of removing
+            // Clear transient UI state so a reconnecting client starts fresh
+            session.activeDialogue = null;
+            session.shopOpen       = false;
+            session.activeNpcId    = null;
+
             session.disconnected = true;
             session.disconnectTime = System.currentTimeMillis();
 
-            System.out.println("[Server] Player disconnected (grace): " + session.username);
+            System.out.println("[PlayerService] Player disconnected (grace): " + session.username);
         } else {
             sessions.remove(playerId);
         }
@@ -212,14 +258,15 @@ public class PlayerService {
 
         if (data == null) return;
 
-        data.passwordHash = data.passwordHash; // already set
         data.rights = session.getRights();
         data.x = session.x;
         data.y = session.y;
         data.hp = session.hp;
 
         data.inventory.clear();
-        data.inventory.putAll(session.inventory.getItems());
+        for (var entry : session.inventory.getItems().entrySet()) {
+            data.inventory.put(String.valueOf(entry.getKey()), entry.getValue());
+        }
 
         data.skills.clear();
         for (var entry : session.skills.getLevels().entrySet()) {
@@ -231,8 +278,15 @@ public class PlayerService {
             data.skillXp.put(entry.getKey().name(), entry.getValue());
         }
 
-        data.questState = session.questSystem.getGettingStarted().getState().name();
-        data.questLogsChopped = session.questSystem.getGettingStarted().getLogsChopped();
+        data.quests.clear();
+        for (var entry : session.quests.entrySet()) {
+            data.quests.put(String.valueOf(entry.getKey()), entry.getValue().serialize());
+        }
+
+        data.equipment.clear();
+        for (var entry : session.equipment.getSlots().entrySet()) {
+            data.equipment.put(entry.getKey().name(), entry.getValue());
+        }
 
         PlayerSaveSystem.save(data);
 
@@ -291,6 +345,72 @@ public class PlayerService {
 
         thread.setDaemon(true);
         thread.start();
+    }
+
+    // -----------------------------------------------------------------------
+    //  Equipment
+    // -----------------------------------------------------------------------
+
+    public void handleEquip(String playerId, int itemId) {
+        PlayerSession session = sessions.get(playerId);
+        if (session == null || !session.loggedIn) return;
+        if (!ItemDefinitionManager.exists(itemId)) return;
+
+        ItemDefinition def = ItemDefinitionManager.get(itemId);
+        if (def.equipSlot == null) return;
+
+        EquipSlot slot = EquipSlot.fromString(def.equipSlot);
+        if (slot == null) return;
+
+        if (session.inventory.countOf(itemId) < 1) return;
+
+        // Remove the item being equipped from inventory first to free its slot,
+        // then swap the previously equipped item (if any) back in.
+        session.inventory.removeItem(itemId, 1);
+
+        int existing = session.equipment.getItemInSlot(slot);
+        if (existing != -1) {
+            session.inventory.addItem(existing, 1);
+            session.equipment.unequip(slot);
+        }
+
+        session.equipment.equip(slot, itemId);
+
+        ClientHandler h = session.getHandler();
+        if (h != null) {
+            h.send(session.inventory.buildSnapshot());
+            h.send(session.equipment.buildSnapshot());
+        }
+
+        System.out.println("[PlayerService] " + session.username
+                + " equipped " + def.name + " (" + slot + ")");
+    }
+
+    public void handleUnequip(String playerId, String slotName) {
+        PlayerSession session = sessions.get(playerId);
+        if (session == null || !session.loggedIn) return;
+
+        EquipSlot slot = EquipSlot.fromString(slotName);
+        if (slot == null) return;
+
+        int itemId = session.equipment.getItemInSlot(slot);
+        if (itemId == -1) return;
+
+        if (!session.inventory.hasSpace(itemId)) {
+            session.sendInventoryFullMessage();
+            return;
+        }
+
+        session.inventory.addItem(itemId, 1);
+        session.equipment.unequip(slot);
+
+        ClientHandler h = session.getHandler();
+        if (h != null) {
+            h.send(session.inventory.buildSnapshot());
+            h.send(session.equipment.buildSnapshot());
+        }
+
+        System.out.println("[PlayerService] " + session.username + " unequipped " + slot);
     }
 
     // -----------------------------------------------------------------------

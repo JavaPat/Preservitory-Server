@@ -1,0 +1,9 @@
+{
+  "id": 1002,
+  "name": "Willow tree",
+  "type": "TREE",
+  "resourceItemId": 2,
+  "xp": 67,
+  "respawnMs": 25000,
+  "spriteKey": "willow_tree"
+}

@@ -1,0 +1,9 @@
+{
+  "id": 1004,
+  "name": "Yew Tree",
+  "type": "TREE",
+  "resourceItemId": 2,
+  "xp": 100,
+  "respawnMs": 40000,
+  "spriteKey": "yew_tree"
+}

@@ -1,0 +1,17 @@
+{
+  "id": 1,
+  "key": "guide_quest",
+  "name": "Getting Started",
+  "startDialogueIds": ["guide_start"],
+  "inProgressDialogueIds": ["guide_in_progress"],
+  "readyToCompleteDialogueIds": ["guide_ready_to_complete"],
+  "completedDialogueIds": ["guide_complete"],
+  "requiredItems": {
+    "2": 3
+  },
+  "rewardItems": {
+    "1": 50
+  },
+  "rewardXp": 50,
+  "rewardXpSkill": "WOODCUTTING"
+}

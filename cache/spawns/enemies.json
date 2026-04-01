@@ -1,0 +1,35 @@
+[
+  // ── Goblin Valley (W of settlement, two tight clusters) ──────────────────
+  // Quest: Kill 5 goblins. Two clusters of 4 so players always find targets.
+  // Cluster A — NW pocket (x:192–320, y:160–288)
+  { "id": "goblin_1", "definitionId": 1, "x": 224, "y": 192 },
+  { "id": "goblin_2", "definitionId": 1, "x": 288, "y": 160 },
+  { "id": "goblin_3", "definitionId": 1, "x": 256, "y": 256 },
+  { "id": "goblin_4", "definitionId": 1, "x": 320, "y": 224 },
+  // Cluster B — SW pocket (x:192–320, y:416–512)
+  { "id": "goblin_5", "definitionId": 1, "x": 224, "y": 448 },
+  { "id": "goblin_6", "definitionId": 1, "x": 288, "y": 416 },
+  { "id": "goblin_7", "definitionId": 1, "x": 256, "y": 512 },
+  { "id": "goblin_8", "definitionId": 1, "x": 320, "y": 480 },
+
+  // ── Hobgoblin Ridge (NE corner) ───────────────────────────────────────────
+  // Mid-tier zone, no quest — exploration reward. Two clusters of 3.
+  // Cluster A — inner ridge (x:768–864, y:128–256)
+  { "id": "hobgoblin_1", "definitionId": 2, "x": 800, "y": 160 },
+  { "id": "hobgoblin_2", "definitionId": 2, "x": 832, "y": 128 },
+  { "id": "hobgoblin_3", "definitionId": 2, "x": 864, "y": 192 },
+  // Cluster B — outer ridge (x:864–928, y:288–384)
+  { "id": "hobgoblin_4", "definitionId": 2, "x": 896, "y": 288 },
+  { "id": "hobgoblin_5", "definitionId": 2, "x": 864, "y": 352 },
+  { "id": "hobgoblin_6", "definitionId": 2, "x": 928, "y": 352 },
+
+  // ── Orc Encampment (SE corner) ────────────────────────────────────────────
+  // Quest: Kill 3 orcs. Front cluster (3) is visible on approach; back (2) rewards pushing in.
+  // Cluster A — front (x:640–736, y:576–640)
+  { "id": "orc_1", "definitionId": 3, "x": 672, "y": 576 },
+  { "id": "orc_2", "definitionId": 3, "x": 640, "y": 640 },
+  { "id": "orc_3", "definitionId": 3, "x": 736, "y": 608 },
+  // Cluster B — deep camp (x:832–928, y:640–720)
+  { "id": "orc_4", "definitionId": 3, "x": 864, "y": 640 },
+  { "id": "orc_5", "definitionId": 3, "x": 896, "y": 704 }
+]

@@ -124,9 +124,11 @@ public class PlayerSaveSystem {
         appendIntField(sb, "hp", data.hp, true);
         appendStringField(sb, "questState", data.questState, true);
         appendIntField(sb, "questLogsChopped", data.questLogsChopped, true);
-        appendMapField(sb, "inventory", data.inventory, true);
-        appendMapField(sb, "skills", data.skills, true);
-        appendMapField(sb, "skillXp", data.skillXp, false);
+        appendStringMapField(sb, "quests", data.quests, true);
+        appendMapField(sb, "inventory",  data.inventory,  true);
+        appendMapField(sb, "skills",     data.skills,     true);
+        appendMapField(sb, "skillXp",    data.skillXp,    true);
+        appendMapField(sb, "equipment",  data.equipment,  false);
         sb.append("}\n");
         return sb.toString();
     }
@@ -147,7 +149,7 @@ public class PlayerSaveSystem {
             try {
                 data.rights = PlayerRole.valueOf(rightsStr);
             } catch (IllegalArgumentException ignored) {
-                System.out.println("Invalid role: " + rightsStr + ", for player: " + username);
+                System.out.println("[PlayerSaveSystem] Invalid role: " + rightsStr + ", for player: " + username);
             }
         }
 
@@ -156,9 +158,11 @@ public class PlayerSaveSystem {
         data.hp = extractIntField(json, "hp", 5);
         data.questState = defaultString(extractStringField(json, "questState"), "NOT_STARTED");
         data.questLogsChopped = extractIntField(json, "questLogsChopped", 0);
+        data.quests.putAll(extractStringMapField(json, "quests"));
         data.inventory.putAll(extractMapField(json, "inventory"));
         data.skills.putAll(extractMapField(json, "skills"));
         data.skillXp.putAll(extractMapField(json, "skillXp"));
+        data.equipment.putAll(extractMapField(json, "equipment"));
         return data;
     }
 
@@ -171,6 +175,21 @@ public class PlayerSaveSystem {
 
     private static void appendIntField(StringBuilder sb, String name, int value, boolean trailingComma) {
         sb.append("  \"").append(name).append("\": ").append(value);
+        if (trailingComma) sb.append(',');
+        sb.append('\n');
+    }
+
+    private static void appendStringMapField(StringBuilder sb, String name,
+                                              Map<String, String> map, boolean trailingComma) {
+        sb.append("  \"").append(name).append("\": {\n");
+        int index = 0;
+        for (Map.Entry<String, String> entry : map.entrySet()) {
+            sb.append("    \"").append(escape(entry.getKey())).append("\": \"")
+              .append(escape(entry.getValue())).append("\"");
+            if (++index < map.size()) sb.append(',');
+            sb.append('\n');
+        }
+        sb.append("  }");
         if (trailingComma) sb.append(',');
         sb.append('\n');
     }
@@ -198,6 +217,17 @@ public class PlayerSaveSystem {
         Matcher matcher = Pattern.compile(String.format(INT_FIELD_PATTERN.pattern(), Pattern.quote(fieldName)))
                 .matcher(json);
         return matcher.find() ? Integer.parseInt(matcher.group(1)) : fallback;
+    }
+
+    private static Map<String, String> extractStringMapField(String json, String fieldName) {
+        LinkedHashMap<String, String> map = new LinkedHashMap<>();
+        String body = extractObjectBody(json, fieldName);
+        if (body == null || body.isBlank()) return map;
+        Matcher matcher = Pattern.compile("\"([^\"]+)\"\\s*:\\s*\"([^\"]*)\"").matcher(body);
+        while (matcher.find()) {
+            map.put(unescape(matcher.group(1)), unescape(matcher.group(2)));
+        }
+        return map;
     }
 
     private static Map<String, Integer> extractMapField(String json, String fieldName) {

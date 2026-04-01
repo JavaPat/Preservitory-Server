@@ -1,0 +1,10 @@
+{
+  "id": "pest_control_start",
+  "npcId": 4,
+  "lines": [
+    "Hey, adventurer! Thank goodness someone capable is here.",
+    "Those goblins south of town have been raiding our supplies.",
+    "We need you to put them down. Kill 5 goblins and report back.",
+    "There will be a reward in it for you."
+  ]
+}

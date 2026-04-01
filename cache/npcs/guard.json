@@ -1,0 +1,8 @@
+{
+  "id": 4,
+  "name": "Guard",
+  "shopkeeper": false,
+  "wander": false,
+  "wanderRadius": 0,
+  "questId": "pest_control"
+}

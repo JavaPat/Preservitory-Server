@@ -1,6 +1,10 @@
 package com.classic.preservitory.server.combat;
 
 import com.classic.preservitory.server.Constants;
+import com.classic.preservitory.server.definitions.EnemyDefinition;
+import com.classic.preservitory.server.definitions.EnemyDefinitionManager;
+import com.classic.preservitory.server.definitions.ItemDefinition;
+import com.classic.preservitory.server.definitions.ItemDefinitionManager;
 import com.classic.preservitory.server.net.BroadcastService;
 import com.classic.preservitory.server.net.ClientHandler;
 import com.classic.preservitory.server.objects.EnemyData;
@@ -12,6 +16,7 @@ import com.classic.preservitory.server.player.PlayerSession;
 import com.classic.preservitory.server.player.skills.Skill;
 import com.classic.preservitory.server.player.skills.SkillService;
 import com.classic.preservitory.util.ValidationUtil;
+import com.classic.preservitory.server.quest.QuestService;
 import com.classic.preservitory.server.world.EnemyManager;
 import com.classic.preservitory.server.world.LootManager;
 import com.classic.preservitory.server.world.TreeManager;
@@ -21,7 +26,6 @@ import java.util.Map;
 
 public class CombatServices {
 
-    private static final int GOBLIN_DEFENCE_LEVEL = 2;
     private static final long ATTACK_COOLDOWN_MS = 500L;
 
     private static final double ATTACK_RANGE_PX = TreeManager.TILE_SIZE * 1.7;
@@ -31,15 +35,18 @@ public class CombatServices {
     private final EnemyManager enemyManager;
     private final LootManager lootManager;
     private final BroadcastService broadcastService;
+    private final QuestService questService;
 
     public CombatServices(Map<String, PlayerSession> sessions,
                           EnemyManager enemyManager,
                           LootManager lootManager,
-                          BroadcastService broadcastService) {
+                          BroadcastService broadcastService,
+                          QuestService questService) {
         this.sessions = sessions;
         this.enemyManager = enemyManager;
         this.lootManager = lootManager;
         this.broadcastService = broadcastService;
+        this.questService = questService;
     }
 
     // -----------------------------------------------------------------------
@@ -68,7 +75,12 @@ public class CombatServices {
 
         if (!ValidationUtil.isWithinRange(attacker.x, attacker.y, enemyX, enemyY, ATTACK_RANGE_SQ)) return;
 
-        int damage = rollPlayerDamage(attacker);
+        EnemyDefinition enemyDef = EnemyDefinitionManager.get(enemy.definitionId);
+        int damage = rollPlayerDamage(attacker, enemyDef);
+
+        boolean killed = enemyManager.damageEnemy(enemyId, damage);
+
+        enemyManager.engagePlayer(enemyId, attackerId);
 
         // ---------------- XP + HP scaling ----------------
         if (damage > 0) {
@@ -76,15 +88,30 @@ public class CombatServices {
 
             int oldMax = attacker.getMaxHp();
 
-            // Style-based XP
-            switch (attacker.combatStyle) {
-                case ACCURATE -> attacker.skills.addXp(Skill.ATTACK, xp);
-                case AGGRESSIVE -> attacker.skills.addXp(Skill.STRENGTH, xp);
-                case DEFENSIVE -> attacker.skills.addXp(Skill.DEFENCE, xp);
+            // Style-based XP with level-up detection
+            Skill activeSkill = switch (attacker.combatStyle) {
+                case ACCURATE   -> Skill.ATTACK;
+                case AGGRESSIVE -> Skill.STRENGTH;
+                case DEFENSIVE  -> Skill.DEFENCE;
+            };
+            int oldSkillLevel = attacker.skills.getLevel(activeSkill);
+            attacker.skills.addXp(activeSkill, xp);
+            int newSkillLevel = attacker.skills.getLevel(activeSkill);
+            broadcastService.sendToPlayer(attacker.id,
+                    "SKILL_XP " + activeSkill.name().toLowerCase() + " " + xp);
+            if (newSkillLevel > oldSkillLevel) {
+                broadcastService.sendToPlayer(attacker.id,
+                        "SYSTEM Level up! " + activeSkill.name() + " is now level " + newSkillLevel + ".");
             }
 
-            // Always give hitpoints XP
+            // Hitpoints XP with level-up detection
+            int oldHpLevel = attacker.skills.getLevel(Skill.HITPOINTS);
             attacker.skills.addXp(Skill.HITPOINTS, xp / 2);
+            int newHpLevel = attacker.skills.getLevel(Skill.HITPOINTS);
+            if (newHpLevel > oldHpLevel) {
+                broadcastService.sendToPlayer(attacker.id,
+                        "SYSTEM Level up! HITPOINTS is now level " + newHpLevel + ".");
+            }
 
             int newMax = attacker.getMaxHp();
 
@@ -96,26 +123,25 @@ public class CombatServices {
             // Send updated skills
             broadcastService.sendToPlayer(attacker.id,
                     SkillService.buildSkillsPacket(attacker));
-        }
 
-        boolean killed = enemyManager.damageEnemy(enemyId, damage);
-
-        enemyManager.engagePlayer(enemyId, attackerId);
-
-        if (damage > 0) {
             broadcastService.broadcastAll("DAMAGE " + enemyX + " " + enemyY + " " + damage);
         }
 
-        if (damage <= 0 && !killed) return;
+        if (!killed && damage <= 0) return;
 
         broadcastService.broadcastAll(enemyManager.buildSnapshot());
 
         if (killed) {
-            System.out.println("[Server] Enemy killed by player: " + enemyId);
+            System.out.println("[CombatServices] Enemy killed by player " + attackerId + ": " + enemyId);
 
-            List<LootData> drops = lootManager.spawnGoblinDrops(enemyX, enemyY);
+            questService.checkAndAdvanceKillObjective(attacker, enemy.definitionId);
+
+            List<LootData> drops = lootManager.spawnDrops(enemyX, enemyY, enemyDef, attackerId);
             for (LootData d : drops) {
-                broadcastService.broadcastAll(LootManager.buildAddMessage(d));
+                broadcastService.sendToPlayer(attackerId, LootManager.buildAddMessage(d));
+                ItemDefinition itemDef = ItemDefinitionManager.get(d.itemId);
+                String itemName = (itemDef != null) ? itemDef.name : "item #" + d.itemId;
+                broadcastService.sendToPlayer(attackerId, "SYSTEM Loot: " + d.count + "x " + itemName);
             }
         }
     }
@@ -143,7 +169,7 @@ public class CombatServices {
         broadcastService.sendToPlayer(playerId,
                 "PLAYER_HP " + currentHp + " " + session.getMaxHp());
 
-        System.out.println("[Server] Enemy hit player " + playerId
+        System.out.println("[CombatServices] Enemy hit player " + playerId
                 + " for " + reducedDamage + " (raw: " + damage + ")");
     }
 
@@ -151,12 +177,13 @@ public class CombatServices {
     //  Damage calculation
     // -----------------------------------------------------------------------
 
-    private int rollPlayerDamage(PlayerSession player) {
+    private int rollPlayerDamage(PlayerSession player, EnemyDefinition enemyDef) {
 
-        int attack = player.skills.getLevel(Skill.ATTACK);
-        int strength = player.skills.getLevel(Skill.STRENGTH);
+        int attack   = player.skills.getLevel(Skill.ATTACK)   + player.equipment.getTotalAttackBonus();
+        int strength = player.skills.getLevel(Skill.STRENGTH) + player.equipment.getTotalStrengthBonus();
+        int enemyDefense = enemyDef.defense;
 
-        double hitChance = (double) attack / (attack + GOBLIN_DEFENCE_LEVEL);
+        double hitChance = (double) attack / (attack + enemyDefense);
 
         if (player.combatStyle == CombatStyle.ACCURATE) {
             hitChance += 0.10;
@@ -166,7 +193,7 @@ public class CombatServices {
         hitChance = Math.min(0.95, hitChance);
 
         if (Math.random() > hitChance) {
-            return 0;
+            return 1;   // glancing blow — always deal minimum damage
         }
 
         int maxHit = strength;
@@ -210,23 +237,31 @@ public class CombatServices {
                 // wait before respawn
                 if (now - s.deathTime >= 3000) {
 
-                    System.out.println("[Respawn] " + s.username);
+                    System.out.println("[CombatServices] Player respawned: " + s.username);
 
                     s.hp = s.getMaxHp();
                     s.x = Constants.DEFAULT_SPAWN_X;
                     s.y = Constants.DEFAULT_SPAWN_Y;
                     s.deathTime = 0;
 
+                    // Reset movement timestamp BEFORE sending any messages.
+                    // If lastMoveAtMs is stale (player was dead for seconds), the
+                    // movement validator allows a large jump — the client could send
+                    // a MOVE to the death position and override the respawn coords.
+                    // Resetting here tightens the allowed distance immediately.
+                    s.lastMoveAtMs = System.currentTimeMillis();
+
+                    // Grant brief spawn protection so the player isn't instantly
+                    // hit again the moment they respawn.
+                    s.protectedUntilMs = s.lastMoveAtMs + 5_000L;
+
                     ClientHandler h = s.getHandler();
                     if (h != null) {
                         h.send("PLAYER_HP " + s.hp + " " + s.getMaxHp());
-                        h.send("PLAYER_TELEPORT " + s.x + " " + s.y); // 🔥 instant move
+                        h.send("PLAYER_TELEPORT " + s.x + " " + s.y);
                     }
 
-                    // 🔥 THIS is the real fix
                     broadcastService.broadcastPositions();
-
-                    s.lastMoveAtMs = System.currentTimeMillis();
 
                     broadcastService.sendToPlayer(s.id,
                             "SYSTEM You have respawned.");

@@ -14,6 +14,7 @@ public class BroadcastService {
 
     public void broadcastAll(String message) {
         for (PlayerSession s : sessions.values()) {
+            if (s.disconnected) continue;
             ClientHandler h = s.getHandler();
             if (h != null) {
                 h.send(message);

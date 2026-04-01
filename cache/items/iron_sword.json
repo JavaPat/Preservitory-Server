@@ -1,0 +1,10 @@
+{
+  "id": 106,
+  "name": "Iron Sword",
+  "value": 200,
+  "stackable": false,
+  "tradable": true,
+  "equipSlot": "WEAPON",
+  "attackBonus": 6,
+  "strengthBonus": 4
+}

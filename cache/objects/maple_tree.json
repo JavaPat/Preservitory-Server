@@ -1,0 +1,9 @@
+{
+  "id": 1003,
+  "name": "Maple Tree",
+  "type": "TREE",
+  "resourceItemId": 2,
+  "xp": 100,
+  "respawnMs": 30000,
+  "spriteKey": "maple_tree"
+}

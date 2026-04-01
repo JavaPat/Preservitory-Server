@@ -1,0 +1,7 @@
+[
+  { "id": "guide",    "definitionId": 1, "x": 512, "y": 288 },
+  { "id": "merchant", "definitionId": 2, "x": 576, "y": 288 },
+  { "id": "wander",   "definitionId": 3, "x": 600, "y": 300 },
+  { "id": "guard",    "definitionId": 4, "x": 448, "y": 320 },
+  { "id": "captain",  "definitionId": 5, "x": 640, "y": 320 }
+]

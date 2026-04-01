@@ -1,0 +1,32 @@
+{
+  "id": 2,
+  "key": "pest_control",
+  "name": "Pest Control",
+  "startDialogueIds": ["pest_control_start"],
+  "inProgressDialogueIds": [],
+  "readyToCompleteDialogueIds": [],
+  "completedDialogueIds": ["pest_control_done"],
+  "requiredItems": {},
+  "rewardItems": {
+    "1": 50,
+    "106": 1
+  },
+  "rewardXp": 100,
+  "rewardXpSkill": "ATTACK",
+  "stages": [
+    {
+      "id": 0,
+      "description": "Kill 5 goblins near the settlement. (0/5)",
+      "dialogueId": "pest_control_killing",
+      "objective": { "type": "KILL", "targetId": 1, "amount": 5 },
+      "action": null
+    },
+    {
+      "id": 1,
+      "description": "Report back to the Guard.",
+      "dialogueId": "pest_control_complete",
+      "objective": null,
+      "action": "COMPLETE_QUEST"
+    }
+  ]
+}

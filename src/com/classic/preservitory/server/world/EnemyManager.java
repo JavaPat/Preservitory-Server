@@ -1,7 +1,10 @@
 package com.classic.preservitory.server.world;
 
+import com.classic.preservitory.server.definitions.EnemyDefinition;
+import com.classic.preservitory.server.definitions.EnemyDefinitionManager;
 import com.classic.preservitory.server.objects.EnemyData;
 import com.classic.preservitory.server.objects.EnemyState;
+import com.classic.preservitory.server.spawns.SpawnEntry;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -13,8 +16,24 @@ import java.util.concurrent.ConcurrentHashMap;
  * players and internal timers.  All logic lives here; the client is a pure
  * renderer that reflects the latest ENEMIES snapshot.
  *
- * Current behaviour is intentionally passive: goblins wander and can be
- * attacked by players, but they do not auto-aggro or retaliate yet.
+ * <h3>Update flow</h3>
+ * {@link #update} runs two sequential phases each tick:
+ * <ol>
+ *   <li><b>FSM phase</b> — handles state transitions for IDLE, AGGRO, ATTACK,
+ *       and DEAD.  Combat-driven movement (chasing) happens here via
+ *       {@link EntityMovementSystem#stepToward}.</li>
+ *   <li><b>Movement phase</b> — delegates to
+ *       {@link EntityMovementSystem#update(Collection, long)}.  The movement
+ *       system checks {@link com.classic.preservitory.server.objects.EnemyData#isWandering()}
+ *       on each enemy and only moves those currently in WANDER state.</li>
+ * </ol>
+ *
+ * This clean separation means:
+ * <ul>
+ *   <li>Movement logic lives exclusively in {@link EntityMovementSystem}.</li>
+ *   <li>Combat logic lives exclusively here.</li>
+ *   <li>No duplication with NPCManager movement.</li>
+ * </ul>
  */
 public class EnemyManager {
 
@@ -22,34 +41,16 @@ public class EnemyManager {
     //  Constants
     // -----------------------------------------------------------------------
 
+    /** Fallback respawn delay if the definition does not specify one. */
     private static final long   RESPAWN_DELAY_MS  = 30_000L;
-    private static final long   IDLE_DURATION_MS  =  1_500L;  // pause after respawn
-    private static final int    TILE_SIZE         = 32;
-    private static final int    GOBLIN_MAX_HP     = 10;
-
-    /** Movement speed in pixels per millisecond (~1.25 tiles/sec). */
-    private static final double SPEED_PX_PER_MS   = 0.040;
-
-    /** How far from its spawn an enemy may wander (px). */
-    private static final int    WANDER_RADIUS_PX  = 3 * TILE_SIZE;  // 96 px
-
-    /** Min/max ms between wander-target picks. */
-    private static final long   WANDER_MIN_MS     = 3_000L;
-    private static final long   WANDER_MAX_MS     = 6_000L;
-
-    /** Stop moving when this close to the target (avoids jitter). */
-    private static final double ARRIVE_THRESHOLD  = 2.0;
+    private static final long   IDLE_DURATION_MS  =  1_500L;
+    private static final int    TILE_SIZE         = TreeManager.TILE_SIZE;
 
     /** Pixel distance within which an enemy can land a melee hit. */
-    private static final double ATTACK_RANGE_PX  = 2.5 * TILE_SIZE;  // ~80 px
-    private static final double ATTACK_RANGE_SQ  = ATTACK_RANGE_PX * ATTACK_RANGE_PX;
-
-    /** Min/max damage per enemy hit. */
-    private static final int    ENEMY_DMG_MIN     = 1;
-    private static final int    ENEMY_DMG_MAX     = 3;
-
-    private static final int    WORLD_W           = 30 * TILE_SIZE;  // 960 px
-    private static final int    WORLD_H           = 24 * TILE_SIZE;  // 768 px
+    private static final double ATTACK_RANGE_PX   = 2.5 * TILE_SIZE;  // ~80 px
+    private static final double ATTACK_RANGE_SQ   = ATTACK_RANGE_PX * ATTACK_RANGE_PX;
+    private static final double MAX_CHASE_DISTANCE_PX = 8.0 * TILE_SIZE;
+    private static final double MAX_CHASE_DISTANCE_SQ = MAX_CHASE_DISTANCE_PX * MAX_CHASE_DISTANCE_PX;
 
     // -----------------------------------------------------------------------
     //  Result types returned by update()
@@ -82,22 +83,21 @@ public class EnemyManager {
     // -----------------------------------------------------------------------
 
     private final ConcurrentHashMap<String, EnemyData> enemies = new ConcurrentHashMap<>();
+    private final EntityMovementSystem movementSystem = new EntityMovementSystem();
     private final Random rng = new Random();
 
     // -----------------------------------------------------------------------
     //  Construction
     // -----------------------------------------------------------------------
 
-    public EnemyManager() {
-        int[][] positions = {
-                { 8,  6}, {13,  5}, { 7, 11},
-                {18,  7}, {11, 13},
-                {24, 10}, {22, 17}
-        };
-        for (int i = 0; i < positions.length; i++) {
-            int x = positions[i][0] * TILE_SIZE;
-            int y = positions[i][1] * TILE_SIZE;
-            EnemyData e = new EnemyData("G" + i, x, y, GOBLIN_MAX_HP);
+    public EnemyManager(List<SpawnEntry> spawns) {
+        for (SpawnEntry spawn : spawns) {
+            EnemyDefinition def = EnemyDefinitionManager.get(spawn.definitionId);
+            int wanderRadiusPx  = def.wander ? def.wanderRadiusTiles * TILE_SIZE : 0;
+            EnemyData e = new EnemyData(spawn.id, def.id, spawn.x, spawn.y,
+                                        def.maxHp, def.attackCooldownMs,
+                                        def.respawnDelayMs > 0 ? def.respawnDelayMs : RESPAWN_DELAY_MS,
+                                        def.wander, wanderRadiusPx);
             enemies.put(e.id, e);
         }
         System.out.println("[EnemyManager] Spawned " + enemies.size() + " enemies.");
@@ -125,12 +125,12 @@ public class EnemyManager {
         if (e == null) return false;
         synchronized (e) {
             if (e.state == EnemyState.DEAD) return false;
-            int appliedDamage = Math.max(0, amount);
-            e.hp = Math.max(0, Math.min(e.maxHp, e.hp - appliedDamage));
+            e.hp = Math.max(0, Math.min(e.maxHp, e.hp - Math.max(0, amount)));
             if (e.hp == 0) {
+                e.dyingUntilMs = System.currentTimeMillis() + 1_500L;
                 transitionTo(e, EnemyState.DEAD);
                 System.out.println("[EnemyManager] Enemy killed: " + id
-                        + " (respawn in " + RESPAWN_DELAY_MS / 1000 + "s)");
+                        + " (respawn in " + e.respawnDelayMs / 1000 + "s)");
                 return true;
             }
         }
@@ -154,11 +154,20 @@ public class EnemyManager {
     }
 
     // -----------------------------------------------------------------------
-    //  Update loop — called by the broadcast thread
+    //  Update loop — called by WorldTickService
     // -----------------------------------------------------------------------
 
     /**
-     * Tick every enemy through its FSM for one time step.
+     * Tick every enemy for one time step using a two-phase approach:
+     *
+     * <ol>
+     *   <li><b>FSM phase</b>: transitions and combat movement, one enemy at a time
+     *       under the enemy's own monitor.</li>
+     *   <li><b>Movement phase</b>: shared {@link EntityMovementSystem} processes all
+     *       enemies.  The movement system skips enemies whose
+     *       {@link EnemyData#isWandering()} returns false (i.e. any enemy not in
+     *       WANDER state).</li>
+     * </ol>
      *
      * @param deltaTimeMs     elapsed ms since last call
      * @param playerPositions current world-pixel positions keyed by player ID
@@ -168,13 +177,15 @@ public class EnemyManager {
         boolean           changed = false;
         List<AttackEvent> attacks = new ArrayList<>();
 
+        // Phase 1 — FSM transitions and combat movement
         for (EnemyData e : enemies.values()) {
             synchronized (e) {
-                if (tickEnemy(e, deltaTimeMs, playerPositions, attacks)) {
-                    changed = true;
-                }
+                if (tickFsm(e, deltaTimeMs, playerPositions, attacks)) changed = true;
             }
         }
+
+        // Phase 2 — wander movement (skips non-WANDER enemies via isWandering())
+        if (movementSystem.update(enemies.values(), deltaTimeMs)) changed = true;
 
         return new UpdateResult(changed, attacks);
     }
@@ -184,20 +195,23 @@ public class EnemyManager {
     // -----------------------------------------------------------------------
 
     /**
-     * Route this enemy to the correct state handler.
+     * Route this enemy to the correct FSM state handler.
+     * WANDER state movement is intentionally absent — handled by Phase 2.
      *
-     * @return {@code true} if the enemy's position or alive-state changed.
+     * @return {@code true} if a combat-driven position or alive-state changed.
      */
-    private boolean tickEnemy(EnemyData e, long dt,
-                               Map<String, int[]> players,
-                               List<AttackEvent> attacks) {
+    private boolean tickFsm(EnemyData e, long dt,
+                             Map<String, int[]> players,
+                             List<AttackEvent> attacks) {
+        if (e.state != EnemyState.DEAD && e.targetPlayerId != null) {
+            return tickCombat(e, dt, players, attacks);
+        }
         switch (e.state) {
-            case IDLE:   return tickIdle  (e, dt, players);
-            case WANDER: return tickWander(e, dt, players);
+            case IDLE:   return tickIdle  (e, dt);
             case AGGRO:  return tickAggro (e, dt, players, attacks);
             case ATTACK: return tickAttack(e, dt, players, attacks);
             case DEAD:   return tickDead  (e, dt);
-            default:     return false;
+            default:     return false;  // WANDER — movement handled by Phase 2
         }
     }
 
@@ -205,105 +219,100 @@ public class EnemyManager {
     //  State handlers
     // -----------------------------------------------------------------------
 
-    /**
-     * IDLE — enemy stands motionless at its spawn for a short duration after
-     * respawning, then transitions to WANDER.
-     */
-    private boolean tickIdle(EnemyData e, long dt, Map<String, int[]> players) {
+    /** IDLE — pause after respawn, then transition to WANDER. */
+    private boolean tickIdle(EnemyData e, long dt) {
         e.stateTimer -= dt;
         if (e.stateTimer <= 0) {
             transitionTo(e, EnemyState.WANDER);
         }
-        return false; // no movement while idle
+        return false;
     }
 
     /**
-     * WANDER — enemy picks random tiles near its spawn and walks between them.
-     */
-    private boolean tickWander(EnemyData e, long dt, Map<String, int[]> players) {
-        e.stateTimer -= dt;
-        if (e.stateTimer <= 0) {
-            pickWanderTarget(e);
-            e.stateTimer = WANDER_MIN_MS
-                    + (long)(rng.nextDouble() * (WANDER_MAX_MS - WANDER_MIN_MS));
-        }
-
-        return stepToward(e, dt);
-    }
-
-    /**
-     * AGGRO — enemy chases its target player. Transitions to ATTACK when in
-     * melee range, or back to WANDER if the target has gone.
+     * AGGRO — chase target player. Transitions to ATTACK when in melee range,
+     * or back to WANDER if the target is gone.
      */
     private boolean tickAggro(EnemyData e, long dt,
+                               Map<String, int[]> players,
+                               List<AttackEvent> attacks) {
+        return tickCombat(e, dt, players, attacks);
+    }
+
+    /**
+     * ATTACK — stand in melee range and hit on cooldown.
+     * Re-enters AGGRO if the player moves out of range.
+     */
+    private boolean tickAttack(EnemyData e, long dt,
+                                Map<String, int[]> players,
+                                List<AttackEvent> attacks) {
+        return tickCombat(e, dt, players, attacks);
+    }
+
+    /** DEAD — wait for respawn delay, then reset enemy to spawn and re-enter IDLE. */
+    private boolean tickDead(EnemyData e, long dt) {
+        e.stateTimer -= dt;
+        if (e.stateTimer <= 0) {
+            e.hp            = e.maxHp;
+            e.x             = e.spawnX;
+            e.y             = e.spawnY;
+            e.targetX       = e.spawnX;
+            e.targetY       = e.spawnY;
+            e.wanderTimer   = 0L;
+            e.attackTimerMs = 0L;
+            transitionTo(e, EnemyState.IDLE);
+            System.out.println("[EnemyManager] Enemy respawned: " + e.id);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Shared combat handler used whenever the enemy has a target.
+     * Chases while out of melee range, attacks while in range, and disengages
+     * if the target vanishes or leaves the chase radius.
+     */
+    private boolean tickCombat(EnemyData e, long dt,
                                Map<String, int[]> players,
                                List<AttackEvent> attacks) {
         if (e.targetPlayerId == null) {
             transitionTo(e, EnemyState.WANDER);
             return false;
         }
+
         int[] pos = players.get(e.targetPlayerId);
         if (pos == null) {
-            // Player disconnected or dead — give up
-            e.targetPlayerId = null;
+            clearTarget(e);
             transitionTo(e, EnemyState.WANDER);
             return false;
         }
-        if (distSq(e.x, e.y, pos[0], pos[1]) <= ATTACK_RANGE_SQ) {
-            transitionTo(e, EnemyState.ATTACK);
+
+        double distSq = distSq(e.x, e.y, pos[0], pos[1]);
+        if (distSq > MAX_CHASE_DISTANCE_SQ) {
+            clearTarget(e);
+            transitionTo(e, EnemyState.WANDER);
             return false;
         }
+
         e.targetX = pos[0];
         e.targetY = pos[1];
-        return stepToward(e, dt);
-    }
 
-    /**
-     * ATTACK — enemy stands in range and hits the target player on a cooldown.
-     * Chases again if the player moves out of melee range.
-     */
-    private boolean tickAttack(EnemyData e, long dt,
-                                Map<String, int[]> players,
-                                List<AttackEvent> attacks) {
-        if (e.targetPlayerId == null) {
-            transitionTo(e, EnemyState.WANDER);
-            return false;
+        if (distSq > ATTACK_RANGE_SQ) {
+            if (e.state != EnemyState.AGGRO) {
+                transitionTo(e, EnemyState.AGGRO);
+            }
+            return EntityMovementSystem.stepToward(e, dt);
         }
-        int[] pos = players.get(e.targetPlayerId);
-        if (pos == null) {
-            e.targetPlayerId = null;
-            transitionTo(e, EnemyState.WANDER);
-            return false;
+
+        if (e.state != EnemyState.ATTACK) {
+            transitionTo(e, EnemyState.ATTACK);
         }
-        if (distSq(e.x, e.y, pos[0], pos[1]) > ATTACK_RANGE_SQ) {
-            transitionTo(e, EnemyState.AGGRO);
-            return false;
-        }
+
         e.attackTimerMs -= dt;
         if (e.attackTimerMs <= 0) {
             e.attackTimerMs = e.attackCooldownMs;
-            int dmg = ENEMY_DMG_MIN + rng.nextInt(ENEMY_DMG_MAX - ENEMY_DMG_MIN + 1);
+            EnemyDefinition def = EnemyDefinitionManager.get(e.definitionId);
+            int dmg = def.minDamage + rng.nextInt(Math.max(1, def.maxDamage - def.minDamage + 1));
             attacks.add(new AttackEvent(e.targetPlayerId, dmg));
-        }
-        return false;
-    }
-
-    /**
-     * DEAD — counts down the respawn timer, then resets the enemy to its
-     * spawn position and transitions to IDLE.
-     */
-    private boolean tickDead(EnemyData e, long dt) {
-        e.stateTimer -= dt;
-        if (e.stateTimer <= 0) {
-            e.hp          = e.maxHp;
-            e.x           = e.spawnX;
-            e.y           = e.spawnY;
-            e.targetX     = e.spawnX;
-            e.targetY     = e.spawnY;
-            e.attackTimerMs = 0L;
-            transitionTo(e, EnemyState.IDLE);
-            System.out.println("[EnemyManager] Enemy respawned: " + e.id);
-            return true;  // now visible in snapshot again
         }
         return false;
     }
@@ -312,10 +321,6 @@ public class EnemyManager {
     //  State transition helper
     // -----------------------------------------------------------------------
 
-    /**
-     * Change {@code e}'s state and initialise any entry data for the new state.
-     * Callers are responsible for resetting unrelated data (e.g. HP on respawn).
-     */
     private void transitionTo(EnemyData e, EnemyState next) {
         e.state = next;
         switch (next) {
@@ -323,68 +328,35 @@ public class EnemyManager {
                 e.stateTimer = IDLE_DURATION_MS;
                 break;
             case WANDER:
-                pickWanderTarget(e);
-                e.stateTimer = WANDER_MIN_MS
-                        + (long)(rng.nextDouble() * (WANDER_MAX_MS - WANDER_MIN_MS));
+                // Reset movement target to current position so the wander system picks a
+                // fresh random target within the radius instead of chasing the player's
+                // last known location.
+                e.targetX = e.x;
+                e.targetY = e.y;
+                e.stateTimer = 0L;
                 break;
             case DEAD:
-                e.stateTimer = RESPAWN_DELAY_MS;
+                e.stateTimer = e.respawnDelayMs;
                 break;
             default:
-                e.stateTimer = 0L;  // AGGRO and ATTACK have no entry timer
+                e.stateTimer = 0L;
                 break;
         }
+        // wanderTimer is managed exclusively by EntityMovementSystem — never reset here
+    }
+
+    private void clearTarget(EnemyData e) {
+        e.targetPlayerId = null;
+        e.attackTimerMs = 0L;
     }
 
     // -----------------------------------------------------------------------
-    //  Movement helpers
+    //  Geometry
     // -----------------------------------------------------------------------
 
     private static double distSq(double x1, double y1, double x2, double y2) {
         double dx = x2 - x1, dy = y2 - y1;
         return dx * dx + dy * dy;
-    }
-
-    /**
-     * Advance {@code e} one step toward its current target.
-     *
-     * @return {@code true} if the position actually changed.
-     */
-    private boolean stepToward(EnemyData e, long dt) {
-        double dx   = e.targetX - e.x;
-        double dy   = e.targetY - e.y;
-        double dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist <= ARRIVE_THRESHOLD) return false;
-
-        double step = SPEED_PX_PER_MS * dt;
-        if (step >= dist) {
-            e.x = e.targetX;
-            e.y = e.targetY;
-        } else {
-            e.x += (dx / dist) * step;
-            e.y += (dy / dist) * step;
-        }
-        return true;
-    }
-
-    /**
-     * Choose a random tile within {@link #WANDER_RADIUS_PX} of the enemy's
-     * spawn, snapped to the tile grid and clamped to the world boundary.
-     */
-    private void pickWanderTarget(EnemyData e) {
-        int minX = Math.max(0,       e.spawnX - WANDER_RADIUS_PX);
-        int maxX = Math.min(WORLD_W, e.spawnX + WANDER_RADIUS_PX);
-        int minY = Math.max(0,       e.spawnY - WANDER_RADIUS_PX);
-        int maxY = Math.min(WORLD_H, e.spawnY + WANDER_RADIUS_PX);
-
-        int col = (minX / TILE_SIZE) + rng.nextInt(
-                Math.max(1, (maxX / TILE_SIZE) - (minX / TILE_SIZE) + 1));
-        int row = (minY / TILE_SIZE) + rng.nextInt(
-                Math.max(1, (maxY / TILE_SIZE) - (minY / TILE_SIZE) + 1));
-
-        e.targetX = col * TILE_SIZE;
-        e.targetY = row * TILE_SIZE;
     }
 
     // -----------------------------------------------------------------------
@@ -394,12 +366,12 @@ public class EnemyManager {
     /**
      * Build a full {@code ENEMIES} snapshot of all non-dead enemies.
      * Format per entry: {@code id x y hp maxHp;}
-     * Position is truncated to integer pixels for the wire format.
      */
     public String buildSnapshot() {
+        long now = System.currentTimeMillis();
         StringBuilder sb = new StringBuilder("ENEMIES");
         for (EnemyData e : enemies.values()) {
-            if (e.state == EnemyState.DEAD) continue;
+            if (e.state == EnemyState.DEAD && now >= e.dyingUntilMs) continue;
             sb.append(' ').append(e.id)
               .append(' ').append((int) e.x)
               .append(' ').append((int) e.y)

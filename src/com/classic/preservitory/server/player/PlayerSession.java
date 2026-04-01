@@ -1,15 +1,19 @@
 package com.classic.preservitory.server.player;
 
+import com.classic.preservitory.server.dialogue.DialogueSession;
 import com.classic.preservitory.server.moderation.PlayerRole;
 import com.classic.preservitory.server.net.ClientHandler;
-import com.classic.preservitory.server.quest.QuestSystem;
+import com.classic.preservitory.server.quest.QuestProgress;
+import com.classic.preservitory.server.quest.QuestState;
 import com.classic.preservitory.server.player.skills.Skill;
 import com.classic.preservitory.server.player.skills.SkillSet;
 import com.classic.preservitory.server.world.RegionKey;
 import com.classic.preservitory.server.world.TreeManager;
 
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 public class PlayerSession {
@@ -17,9 +21,9 @@ public class PlayerSession {
     public static final int PLAYER_SPAWN_X = 12 * TreeManager.TILE_SIZE;
     public static final int PLAYER_SPAWN_Y = 9 * TreeManager.TILE_SIZE;
 
-    public final SkillSet skills = new SkillSet();
-    public final QuestSystem questSystem = new QuestSystem();
-    public final ShopSystem shopSystem = new ShopSystem();
+    public final SkillSet        skills    = new SkillSet();
+    public final PlayerEquipment equipment = new PlayerEquipment();
+    public final Map<Integer, QuestProgress> quests = new HashMap<>();
     public final String id;
     private ClientHandler handler;
 
@@ -28,7 +32,7 @@ public class PlayerSession {
     public long disconnectTime = 0;
     public boolean disconnected = false;
 
-    public final PlayerInventory inventory = new PlayerInventory();
+    public final Inventory inventory = new Inventory();
     public final EnumMap<ActionType, Long> lastActionAtMs = new EnumMap<>(ActionType.class);
 
     public volatile int x = PLAYER_SPAWN_X, y = PLAYER_SPAWN_Y;
@@ -43,7 +47,12 @@ public class PlayerSession {
     public CombatStyle combatStyle = CombatStyle.ACCURATE;
     public volatile boolean shopOpen = false;
     public volatile String activeNpcId = null;
+    public volatile String activeTreeId = null;
+    public volatile long lastChopTime = 0L;
     public PlayerData playerData;
+
+    /** Non-null while the player is in an active dialogue session. */
+    public volatile DialogueSession activeDialogue = null;
 
     public PlayerRole getRights() {
         return playerData != null && playerData.rights != null
@@ -96,6 +105,13 @@ public class PlayerSession {
     public boolean isSpawnProtected() {
         return System.currentTimeMillis() < protectedUntilMs;
     }
+
+    /** Sends the standard "inventory is full" system message directly to this player. */
+    public void sendInventoryFullMessage() {
+        ClientHandler h = handler;
+        if (h != null) h.send("SYSTEM Your inventory is full.");
+    }
+
     public void setHandler(ClientHandler handler) {
         this.handler = handler;
     }

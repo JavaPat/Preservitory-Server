@@ -1,0 +1,10 @@
+{
+  "id": "guide_start",
+  "npcId": 1,
+  "lines": [
+    "Welcome to Preservitory, adventurer!",
+    "I'm the town Guide. Let me give you a task.",
+    "Go and chop 3 logs from a nearby tree.",
+    "Return to me with them for a reward!"
+  ]
+}

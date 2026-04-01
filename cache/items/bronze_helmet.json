@@ -1,0 +1,10 @@
+{
+  "id": 105,
+  "name": "Bronze Helmet",
+  "value": 50,
+  "stackable": false,
+  "tradable": true,
+  "equipSlot": "HELMET",
+  "attackBonus": 0,
+  "strengthBonus": 0
+}

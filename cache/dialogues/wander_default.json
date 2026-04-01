@@ -1,0 +1,8 @@
+{
+  "id": "wander_default",
+  "npcId": 3,
+  "lines": [
+    "I am just out here minding my own..",
+    "Go and find something useful to do!"
+  ]
+}

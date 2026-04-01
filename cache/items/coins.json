@@ -1,0 +1,7 @@
+{
+  "id": 1,
+  "name": "Coins",
+  "value": 1,
+  "stackable": true,
+  "tradable": true
+}

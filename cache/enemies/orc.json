@@ -1,0 +1,18 @@
+{
+  "id": 3,
+  "name": "Orc",
+  "maxHp": 70,
+  "attack": 12,
+  "defense": 12,
+  "minDamage": 3,
+  "maxDamage": 9,
+  "attackCooldownMs": 2500,
+  "respawnDelayMs": 45000,
+  "wander": true,
+  "wanderRadius": 2,
+  "dropTable": [
+    { "itemId": 1, "chance": 1.0, "minAmount": 30, "maxAmount": 100 },
+    { "itemId": 106, "chance": 0.05, "minAmount": 1, "maxAmount": 1 },
+    { "itemId": 107, "chance": 0.10, "minAmount": 1, "maxAmount": 1 }
+  ]
+}

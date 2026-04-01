@@ -1,0 +1,15 @@
+[
+  { "id": "tree_1",        "definitionId": 1000, "x": 128,  "y": 128  },
+  { "id": "tree_2",        "definitionId": 1000, "x": 320,  "y": 256  },
+  { "id": "oak_tree_1",    "definitionId": 1001, "x": 256,  "y": 192  },
+  { "id": "willow_tree_1", "definitionId": 1002, "x": 480,  "y": 128  },
+  { "id": "maple_tree_1",  "definitionId": 1003, "x": 576,  "y": 192  },
+  { "id": "yew_tree_1",    "definitionId": 1004, "x": 672,  "y": 256  },
+  { "id": "tin_rock_1",    "definitionId": 1,    "x": 384,  "y": 192  },
+  { "id": "copper_rock_1", "definitionId": 2,    "x": 416,  "y": 192  },
+  { "id": "iron_rock_1",   "definitionId": 3,    "x": 448,  "y": 224  },
+  { "id": "gold_rock_1",   "definitionId": 4,    "x": 480,  "y": 288  },
+  { "id": "mithril_rock_1","definitionId": 5,    "x": 512,  "y": 320  },
+  { "id": "adamant_rock_1","definitionId": 6,    "x": 544,  "y": 352  },
+  { "id": "runite_rock_1", "definitionId": 7,    "x": 576,  "y": 384  }
+]

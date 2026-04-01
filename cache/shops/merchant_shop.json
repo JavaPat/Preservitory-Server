@@ -1,0 +1,23 @@
+{
+  "id": "merchant_shop",
+  "name": "Merchant's Shop",
+  "stock": [
+    { "itemId": 100, "price": 40,  "stock": -1 },
+    { "itemId": 102, "price": 40,  "stock": -1 },
+    { "itemId": 103, "price": 25,  "stock": -1 },
+    { "itemId": 104, "price": 60,  "stock": -1 },
+    { "itemId": 105, "price": 50,  "stock": -1 },
+    { "itemId": 106, "price": 200, "stock": -1 },
+    { "itemId": 107, "price": 100, "stock": -1 }
+  ],
+  "sellPrices": {
+    "2":    3,
+    "3":    6,
+    "1":    1,
+    "104": 30,
+    "105": 25,
+    "106": 100,
+    "107": 50,
+    "108": 200
+  }
+}

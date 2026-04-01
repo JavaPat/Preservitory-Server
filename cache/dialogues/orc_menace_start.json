@@ -1,0 +1,10 @@
+{
+  "id": "orc_menace_start",
+  "npcId": 5,
+  "lines": [
+    "Adventurer. I've heard about your work with the goblins.",
+    "We have a bigger problem. An orc warband has made camp to the east.",
+    "Orcs are tough — don't underestimate them.",
+    "Kill 3 orcs and return to me. I'll make it worth your while."
+  ]
+}

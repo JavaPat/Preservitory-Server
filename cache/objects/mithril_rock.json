@@ -1,0 +1,9 @@
+{
+  "id": 5,
+  "name": "Mithril Rock",
+  "type": "ROCK",
+  "resourceItemId": 3,
+  "xp": 55,
+  "respawnMs": 30000,
+  "spriteKey": "mithril_rock"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "guide_ready_to_complete",
+  "npcId": 1,
+  "lines": [
+    "You got the logs! Well done, adventurer!",
+    "As promised, here is your reward."
+  ]
+}

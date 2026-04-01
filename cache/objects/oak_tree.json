@@ -1,5 +1,9 @@
 {
-  "id": "oak_tree",
-  "category": "tree",
-  "respawnMs": 18000
+  "id": 1001,
+  "name": "Oak Tree",
+  "type": "TREE",
+  "resourceItemId": 2,
+  "xp": 35,
+  "respawnMs": 20000,
+  "spriteKey": "oak_tree"
 }

@@ -1,0 +1,18 @@
+{
+  "id": 2,
+  "name": "Hobgoblin",
+  "maxHp": 30,
+  "attack": 6,
+  "defense": 6,
+  "minDamage": 2,
+  "maxDamage": 6,
+  "attackCooldownMs": 1800,
+  "respawnDelayMs": 25000,
+  "wander": true,
+  "wanderRadius": 3,
+  "dropTable": [
+    { "itemId": 1, "chance": 1.0, "minAmount": 10, "maxAmount": 40 },
+    { "itemId": 104, "chance": 0.08, "minAmount": 1, "maxAmount": 1 },
+    { "itemId": 105, "chance": 0.10, "minAmount": 1, "maxAmount": 1 }
+  ]
+}

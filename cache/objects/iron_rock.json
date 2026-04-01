@@ -1,5 +1,9 @@
 {
-  "id": "iron_rock",
-  "category": "rock",
-  "respawnMs": 12000
+  "id": 3,
+  "name": "Iron Rock",
+  "type": "ROCK",
+  "resourceItemId": 3,
+  "xp": 30,
+  "respawnMs": 12000,
+  "spriteKey": "iron_rock"
 }

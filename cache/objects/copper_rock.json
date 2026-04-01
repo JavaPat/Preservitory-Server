@@ -1,0 +1,9 @@
+{
+  "id": 2,
+  "name": "Copper Rock",
+  "type": "ROCK",
+  "resourceItemId": 3,
+  "xp": 30,
+  "respawnMs": 8000,
+  "spriteKey": "copper_rock"
+}

@@ -1,0 +1,9 @@
+{
+  "id": 1,
+  "name": "Tin Rock",
+  "type": "ROCK",
+  "resourceItemId": 3,
+  "xp": 30,
+  "respawnMs": 8000,
+  "spriteKey": "tin_rock"
+}

@@ -1,9 +1,9 @@
 package com.classic.preservitory.server.world;
 
-import com.classic.preservitory.server.content.MapContentLoader;
-import com.classic.preservitory.server.content.ObjectTypeDefinition;
-import com.classic.preservitory.server.content.ObjectTypeLoader;
+import com.classic.preservitory.server.definitions.ObjectDefinition;
+import com.classic.preservitory.server.definitions.ObjectDefinitionManager;
 import com.classic.preservitory.server.objects.TreeData;
+import com.classic.preservitory.server.spawns.SpawnEntry;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,39 +27,22 @@ public class TreeManager {
     private final ConcurrentHashMap<RegionKey, ConcurrentHashMap<String, TreeData>> regionMap
             = new ConcurrentHashMap<>();
 
-    private final TreePersistence persistence = new TreePersistence();
-    private final Map<String, ObjectTypeDefinition> definitions = ObjectTypeLoader.loadAll();
-
     // -----------------------------------------------------------------------
-    //  Construction — load from map JSON
+    //  Construction
     // -----------------------------------------------------------------------
 
-    public TreeManager() {
-        List<TreeData> mapTrees = loadTreesFromMap();
-        for (TreeData t : mapTrees) {
+    public TreeManager(List<SpawnEntry> objectSpawns) {
+        for (SpawnEntry spawn : objectSpawns) {
+            ObjectDefinition def = ObjectDefinitionManager.get(spawn.definitionId);
+            if (def.type != ObjectDefinition.Type.TREE) continue;
+            TreeData t = new TreeData(spawn.id, def.key, def.id, spawn.x, spawn.y);
             allTrees.put(t.id, t);
             bucketFor(t.x, t.y).put(t.id, t);
         }
-        // Startup state is authoritative from starter_map.json only.
-        // Persisted tree state is intentionally not loaded or merged here.
-        System.out.println("[TreeManager] Loaded " + allTrees.size() + " trees from map.");
-    }
-
-    private List<TreeData> loadTreesFromMap() {
-        List<TreeData> trees = new ArrayList<>();
-
-        for (MapContentLoader.MapObjectSpawn spawn : MapContentLoader.loadObjects()) {
-            ObjectTypeDefinition def = definitions.get(spawn.definitionId());
-            if (def == null || !"tree".equals(def.category)) {
-                continue;
-            }
-            trees.add(new TreeData(spawn.id(), spawn.definitionId(), spawn.x(), spawn.y()));
+        if (allTrees.isEmpty()) {
+            throw new IllegalStateException("No tree spawns found in cache/spawns/objects.json.");
         }
-
-        if (trees.isEmpty()) {
-            throw new IllegalStateException("No tree objects found in starter_map.json");
-        }
-        return trees;
+        System.out.println("[TreeManager] Loaded " + allTrees.size() + " trees.");
     }
 
     // -----------------------------------------------------------------------
@@ -136,13 +119,19 @@ public class TreeManager {
     public boolean chopTree(String id) {
         TreeData tree = allTrees.get(id);
         if (tree == null) return false;
+        ObjectDefinition def = ObjectDefinitionManager.get(tree.definitionId);
+        long respawnTimeMs = def.respawnMs > 0 ? def.respawnMs : 12_000L;
+        return chopTree(id, respawnTimeMs);
+    }
+
+    public boolean chopTree(String id, long respawnTimeMs) {
+        TreeData tree = allTrees.get(id);
+        if (tree == null) return false;
         synchronized (tree) {
             if (!tree.alive) return false;
-            ObjectTypeDefinition def = definitions.get(tree.typeId);
             tree.alive       = false;
-            tree.respawnTime = def != null && def.respawnMs > 0 ? def.respawnMs : 12_000L;
+            tree.respawnTime = Math.max(1L, respawnTimeMs);
         }
-        persistence.saveAllTrees(allTrees);
         return true;
     }
 
@@ -160,10 +149,6 @@ public class TreeManager {
                     }
                 }
             }
-        }
-
-        if (!respawned.isEmpty()) {
-            persistence.saveAllTrees(allTrees);
         }
 
         return respawned;

@@ -1,0 +1,10 @@
+{
+  "id": 104,
+  "name": "Bronze Sword",
+  "value": 60,
+  "stackable": false,
+  "tradable": true,
+  "equipSlot": "WEAPON",
+  "attackBonus": 3,
+  "strengthBonus": 2
+}

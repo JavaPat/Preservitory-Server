@@ -1,0 +1,158 @@
+PRESERVITORY — DEVELOPMENT TODO LIST
+
+---
+
+## PHASE 1 — CORE ENGINE (REFINEMENT)
+
+[ ] Replace string-based network IDs (e.g. "goblin_1") with:
+- entityId (unique)
+- definitionId (int)
+
+[ ] Create global debug system:
+- DebugConfig.java
+- Central toggle for logging/debug flags
+
+[ ] Move movement speed into definitions:
+- EnemyDefinition → speed
+- NpcDefinition → speed
+
+---
+
+
+## PHASE 2 — INVENTORY & ITEMS (EXPANSION)
+
+[ ] Add item icons (from cache)
+
+[ ] Render item stacks
+
+[ ] Implement drag & drop
+
+[ ] Add item actions:
+- use
+- drop
+- examine
+
+[ ] (Future) Equipment system
+
+[ ] (Future) Bank system
+
+---
+
+## PHASE 3 — COMBAT EXPANSION
+
+[ ] Implement combat formulas:
+- hit chance
+- max hit
+
+[ ] Add combat styles
+
+[ ] Add combat levels
+
+[ ] (Future) Special attacks
+
+[ ] (Future) Ranged / magic and prayer
+
+[ ] (Future) Status effects
+
+---
+
+## PHASE 4 — NPC / ENEMY AI EXPANSION
+
+[ ] Add aggro radius system
+
+[ ] Implement chase player behavior
+
+[ ] Implement return-to-spawn logic
+
+[ ] Add patrol paths
+
+[ ] (Future) Group AI
+
+[ ] (Future) Boss mechanics
+
+---
+
+## PHASE 5 — WORLD SYSTEMS
+
+[ ] Implement region/chunk loading
+
+[ ] Improve collision system
+
+[ ] Support multiple maps
+
+[ ] (Future) Instanced areas
+
+[ ] (Future) Dungeons
+
+---
+
+## PHASE 6 — AUDIO SYSTEM (EXPANSION)
+
+[ ] Create AudioManager
+
+[ ] Separate:
+- music
+- sound effects
+
+[ ] Add volume controls
+
+[ ] Add UI toggle (mute/unmute)
+
+[ ] (Future) Area-based music
+
+[ ] (Future) combat sounds
+
+---
+
+## PHASE 7 — CACHE SYSTEM (EXPANSION)
+
+[ ] Add version manifest (JSON)
+
+[ ] Implement incremental updates (not full zip)
+
+[ ] Add file integrity checks
+
+[ ] (Future) compression
+
+[ ] (Future) asset encryption
+
+---
+
+## PHASE 8 — TOOLING
+
+[ ] Build item editor (JSON-based)
+
+[ ] Build NPC editor
+
+[ ] Build spawn editor
+
+[ ] Improve workflow for adding content
+
+---
+
+## PHASE 9 — CONTENT PIPELINE
+
+[ ] Add new NPCs
+
+[ ] Add new enemies
+
+[ ] Add new shops
+
+[ ] Add new items
+
+[ ] Ensure NO code changes required for new content
+
+---
+
+## PRIORITY ORDER
+1. CORE ENGINE (REFINEMENT)
+2. Everything else
+
+---
+
+## GOAL
+
+✔ Fully data-driven game
+✔ Scalable systems
+✔ Easy content creation
+✔ Clean architecture

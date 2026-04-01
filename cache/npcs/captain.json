@@ -1,0 +1,8 @@
+{
+  "id": 5,
+  "name": "Captain",
+  "shopkeeper": false,
+  "wander": false,
+  "wanderRadius": 0,
+  "questId": "orc_menace"
+}

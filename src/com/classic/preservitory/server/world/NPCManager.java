@@ -1,62 +1,57 @@
 package com.classic.preservitory.server.world;
 
-import com.classic.preservitory.server.content.MapContentLoader;
-import com.classic.preservitory.server.content.NpcDefinition;
-import com.classic.preservitory.server.content.NpcDefinitionLoader;
-import com.classic.preservitory.server.content.ObjectTypeDefinition;
-import com.classic.preservitory.server.content.ObjectTypeLoader;
+import com.classic.preservitory.server.definitions.NpcDefinition;
+import com.classic.preservitory.server.definitions.NpcDefinitionManager;
 import com.classic.preservitory.server.npc.NPCData;
+import com.classic.preservitory.server.spawns.SpawnEntry;
 
-import java.util.*;
+import java.util.LinkedHashMap;
+import java.util.List;
 
 /**
- * Loads stationary NPCs from {@code starter_map.json} and builds the
- * authoritative snapshot sent to every client on connect.
+ * Manages all live NPC instances and drives their movement each tick.
  *
  * Protocol:
  *   NPCS id x y name shopkeeper;...
  *
- * NPCs are static for now — no AI, no movement.  The full snapshot is
- * sent once on connect; no delta updates are needed while NPCs don't move.
+ * The full snapshot is sent on connect and re-broadcast whenever any wandering
+ * NPC moves.  Static NPCs never trigger a re-broadcast.
  */
 public class NPCManager {
 
-    private static final int TILE_SIZE = 32;
+    private static final int TILE_SIZE = TreeManager.TILE_SIZE;
 
     /** Insertion-order map so snapshot entries are always in a stable sequence. */
     private final LinkedHashMap<String, NPCData> npcs = new LinkedHashMap<>();
-    private final Map<String, NpcDefinition> definitions = NpcDefinitionLoader.loadAll();
-    private final Map<String, ObjectTypeDefinition> objectDefinitions = ObjectTypeLoader.loadAll();
+    private final EntityMovementSystem movementSystem = new EntityMovementSystem();
 
     // -----------------------------------------------------------------------
     //  Construction
     // -----------------------------------------------------------------------
 
-    public NPCManager() {
-        loadFromMap();
+    public NPCManager(List<SpawnEntry> spawns) {
+        for (SpawnEntry spawn : spawns) {
+            NpcDefinition def         = NpcDefinitionManager.get(spawn.definitionId);
+            int           radiusPx    = def.wanderRadiusTiles * TILE_SIZE;
+            npcs.put(spawn.id, new NPCData(
+                    spawn.id, def.id, spawn.x, spawn.y,
+                    def.name, def.shopkeeper,
+                    def.wander, radiusPx));
+        }
         System.out.println("[NPCManager] Loaded " + npcs.size() + " NPCs.");
     }
 
-    private void loadFromMap() {
-        Set<String> blockedTiles = loadBlockedTreeTiles();
+    // -----------------------------------------------------------------------
+    //  Tick
+    // -----------------------------------------------------------------------
 
-        for (MapContentLoader.MapNpcSpawn spawn : MapContentLoader.loadNpcs()) {
-            NpcDefinition definition = definitions.get(spawn.definitionId());
-            if (definition == null) {
-                continue;
-            }
-
-            int[] resolved = resolveNpcPosition(spawn.x(), spawn.y(), blockedTiles);
-            blockedTiles.add(tileKey(resolved[0], resolved[1]));
-            npcs.put(spawn.id(), new NPCData(
-                    spawn.id(),
-                    spawn.definitionId(),
-                    resolved[0],
-                    resolved[1],
-                    definition.name,
-                    definition.shopkeeper
-            ));
-        }
+    /**
+     * Advance all wandering NPCs by one time step.
+     *
+     * @return {@code true} if any NPC position changed (a snapshot broadcast is needed)
+     */
+    public boolean update(long deltaTimeMs) {
+        return movementSystem.update(npcs.values(), deltaTimeMs);
     }
 
     // -----------------------------------------------------------------------
@@ -64,19 +59,18 @@ public class NPCManager {
     // -----------------------------------------------------------------------
 
     /**
-     * Build the full NPC snapshot string to send on connect.
+     * Build the full NPC snapshot string.
      *
+     * Positions are truncated to integer pixels for the wire format.
      * Format: {@code NPCS id x y name shopkeeper;...}
-     * Returns {@code "NPCS"} (no entries) if no NPCs are defined — client
-     * handles an empty payload gracefully.
      */
     public String buildSnapshot() {
         StringBuilder sb = new StringBuilder("NPCS");
         for (NPCData n : npcs.values()) {
             sb.append(' ')
               .append(n.id).append(' ')
-              .append(n.x).append(' ')
-              .append(n.y).append(' ')
+              .append((int) n.x).append(' ')
+              .append((int) n.y).append(' ')
               .append(n.name).append(' ')
               .append(n.shopkeeper)
               .append(';');
@@ -86,45 +80,5 @@ public class NPCManager {
 
     public NPCData getNpc(String id) {
         return npcs.get(id);
-    }
-
-    public NpcDefinition getDefinition(String definitionId) {
-        return definitions.get(definitionId);
-    }
-
-    private Set<String> loadBlockedTreeTiles() {
-        Set<String> blocked = new HashSet<>();
-        for (MapContentLoader.MapObjectSpawn spawn : MapContentLoader.loadObjects()) {
-            ObjectTypeDefinition def = objectDefinitions.get(spawn.definitionId());
-            if (def != null && def.category.equals("tree")) {
-                blocked.add(tileKey(spawn.x(), spawn.y()));
-            }
-        }
-        return blocked;
-    }
-
-    private int[] resolveNpcPosition(int x, int y, Set<String> blockedTiles) {
-        if (!blockedTiles.contains(tileKey(x, y))) {
-            return new int[]{x, y};
-        }
-
-        int[][] offsets = {
-                { TILE_SIZE, 0 }, { -TILE_SIZE, 0 }, { 0, TILE_SIZE }, { 0, -TILE_SIZE },
-                { TILE_SIZE, TILE_SIZE }, { TILE_SIZE, -TILE_SIZE },
-                { -TILE_SIZE, TILE_SIZE }, { -TILE_SIZE, -TILE_SIZE }
-        };
-        for (int[] offset : offsets) {
-            int nx = x + offset[0];
-            int ny = y + offset[1];
-            if (!blockedTiles.contains(tileKey(nx, ny))) {
-                return new int[]{nx, ny};
-            }
-        }
-
-        return new int[]{x + TILE_SIZE, y};
-    }
-
-    private String tileKey(int x, int y) {
-        return x + ":" + y;
     }
 }

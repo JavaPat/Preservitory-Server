@@ -1,0 +1,9 @@
+{
+  "id": 6,
+  "name": "Adamant Rock",
+  "type": "ROCK",
+  "resourceItemId": 3,
+  "xp": 70,
+  "respawnMs": 40000,
+  "spriteKey": "adamant_rock"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "merchant_default",
+  "npcId": 2,
+  "lines": [
+    "Merchant: Supplies for woodcutters and miners.",
+    "Merchant: Buy what you need or sell what you've gathered."
+  ]
+}

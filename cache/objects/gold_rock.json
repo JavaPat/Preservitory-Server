@@ -1,0 +1,9 @@
+{
+  "id": 4,
+  "name": "Gold_rock",
+  "type": "ROCK",
+  "resourceItemId": 3,
+  "xp": 65,
+  "respawnMs": 20000,
+  "spriteKey": "gold_rock"
+}

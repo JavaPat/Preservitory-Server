@@ -1,0 +1,32 @@
+{
+  "id": 3,
+  "key": "orc_menace",
+  "name": "Orc Menace",
+  "startDialogueIds": ["orc_menace_start"],
+  "inProgressDialogueIds": [],
+  "readyToCompleteDialogueIds": [],
+  "completedDialogueIds": ["orc_menace_done"],
+  "requiredItems": {},
+  "rewardItems": {
+    "1": 200,
+    "108": 1
+  },
+  "rewardXp": 300,
+  "rewardXpSkill": "STRENGTH",
+  "stages": [
+    {
+      "id": 0,
+      "description": "Kill 3 orcs to the east. (0/3)",
+      "dialogueId": "orc_menace_killing",
+      "objective": { "type": "KILL", "targetId": 3, "amount": 3 },
+      "action": null
+    },
+    {
+      "id": 1,
+      "description": "Report back to the Captain.",
+      "dialogueId": "orc_menace_complete",
+      "objective": null,
+      "action": "COMPLETE_QUEST"
+    }
+  ]
+}

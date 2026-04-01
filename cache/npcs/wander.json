@@ -1,0 +1,7 @@
+{
+  "id": 3,
+  "name": "Wander",
+  "shopkeeper": false,
+  "wander": true,
+  "wanderRadius": 10
+}

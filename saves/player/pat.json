@@ -1,44 +1,50 @@
 {
   "username": "pat",
-  "passwordHash": "$2a$12$U9.ePnEqWVDC8czuCWXc4uKD1JQiq0ktqI93g2YnMMNtshSZ9WVMi",
-  "rights": "OWNER",
-  "x": 416,
-  "y": 352,
-  "hp": 5,
-  "questState": "NOT_STARTED",
+  "passwordHash": "$2a$12$GgjQ5BsvBAKc8NoJS.GufeEQwoYWJFf68xiNoZj6bcW0JEKHVhKeq",
+  "rights": "PLAYER",
+  "x": 480,
+  "y": 320,
+  "hp": 15,
+  "questState": "",
   "questLogsChopped": 0,
+  "quests": {
+    "2": "IN_PROGRESS:0:0"
+  },
   "inventory": {
+    "3": 1
   },
   "skills": {
     "PRAYER": 1,
     "WOODCUTTING": 1,
-    "HITPOINTS": 1,
-    "STRENGTH": 1,
+    "HITPOINTS": 3,
+    "STRENGTH": 3,
     "SMITHING": 1,
     "FLETCHING": 1,
-    "DEFENCE": 1,
+    "DEFENCE": 3,
     "FISHING": 1,
     "MAGIC": 1,
     "COOKING": 1,
     "CRAFTING": 1,
-    "ATTACK": 1,
+    "ATTACK": 3,
     "MINING": 1,
     "RANGE": 1
   },
   "skillXp": {
     "PRAYER": 0,
     "WOODCUTTING": 0,
-    "HITPOINTS": 0,
-    "STRENGTH": 0,
+    "HITPOINTS": 184,
+    "STRENGTH": 174,
     "SMITHING": 0,
     "FLETCHING": 0,
-    "DEFENCE": 0,
+    "DEFENCE": 174,
     "FISHING": 0,
     "MAGIC": 0,
     "COOKING": 0,
     "CRAFTING": 0,
-    "ATTACK": 0,
-    "MINING": 0,
+    "ATTACK": 194,
+    "MINING": 30,
     "RANGE": 0
+  },
+  "equipment": {
   }
 }
