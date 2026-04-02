@@ -13,6 +13,28 @@ public class GameMessageHandler {
     public void handle(String id, String line) {
         if (line.isEmpty()) return;
 
+        if (line.startsWith("PING:")) {
+            server.handlePing(id, line.substring(5).trim());
+            return;
+        }
+
+        if ("CLEAR_PENDING_INTERACTION".equals(line)) {
+            server.clearPendingInteraction(id);
+            return;
+        }
+
+        if (line.startsWith("GATHER_REQUEST\t")) {
+            String[] parts = line.split("\t", 3);
+            if (parts.length == 3) {
+                if ("woodcutting".equalsIgnoreCase(parts[1])) {
+                    server.handleChop(id, parts[2]);
+                } else if ("mining".equalsIgnoreCase(parts[1])) {
+                    server.handleMine(id, parts[2]);
+                }
+            }
+            return;
+        }
+
         String[] parts = line.split(" ");
 
         if (parts.length == 4 && "UPDATE".equals(parts[0])) {
@@ -36,6 +58,10 @@ public class GameMessageHandler {
 
         } else if (parts.length >= 2 && "ATTACK".equals(parts[0])) {
             server.handleAttack(id, parts[1]);
+
+        } else if (parts.length == 2 && "DROP".equals(parts[0])) {
+            try { server.handleDrop(id, Integer.parseInt(parts[1])); }
+            catch (NumberFormatException ignored) {}
 
         } else if (parts.length == 2 && ("PICKUP".equals(parts[0]) || "PICKUP_ITEM".equals(parts[0]))) {
             server.handlePickup(id, parts[1]);

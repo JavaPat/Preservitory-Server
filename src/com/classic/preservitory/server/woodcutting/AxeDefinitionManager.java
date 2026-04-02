@@ -1,7 +1,6 @@
 package com.classic.preservitory.server.woodcutting;
 
 import com.classic.preservitory.server.definitions.ItemIds;
-import com.classic.preservitory.server.player.EquipSlot;
 import com.classic.preservitory.server.player.PlayerSession;
 
 import java.util.List;
@@ -14,16 +13,15 @@ public final class AxeDefinitionManager {
 
     public AxeDefinition getBestAvailable(PlayerSession session) {
         int woodcuttingLevel = session.skills.getLevel(com.classic.preservitory.server.player.skills.Skill.WOODCUTTING);
-        int equippedWeaponId = session.equipment.getItemInSlot(EquipSlot.WEAPON);
 
         AxeDefinition best = null;
         for (AxeDefinition axe : axes) {
             if (woodcuttingLevel < axe.levelRequired) {
                 continue;
             }
-            boolean equipped = equippedWeaponId == axe.itemId;
-            boolean inInventory = session.inventory.countOf(axe.itemId) > 0;
-            if (!equipped && !inInventory) {
+            boolean hasAxe = session.inventory.countOf(axe.itemId) > 0
+                    || session.equipment.containsItem(axe.itemId);
+            if (!hasAxe) {
                 continue;
             }
             if (best == null || axe.speedMultiplier < best.speedMultiplier) {

@@ -1,5 +1,9 @@
 package com.classic.preservitory.server.woodcutting;
 
+import com.classic.preservitory.server.gathering.GatheringRolls;
+import com.classic.preservitory.server.gathering.ResourceDefinition;
+import com.classic.preservitory.server.gathering.ResourceDefinitionManager;
+import com.classic.preservitory.server.gathering.SkillType;
 import com.classic.preservitory.server.net.BroadcastService;
 import com.classic.preservitory.server.net.ClientHandler;
 import com.classic.preservitory.server.objects.TreeData;
@@ -14,7 +18,6 @@ import com.classic.preservitory.util.ValidationUtil;
 
 import java.util.ArrayList;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 
 public final class WoodcuttingService {
 
@@ -25,20 +28,20 @@ public final class WoodcuttingService {
 
     private final Map<String, PlayerSession> sessions;
     private final TreeManager treeManager;
-    private final TreeDefinitionManager treeDefinitionManager;
+    private final ResourceDefinitionManager resourceDefinitionManager;
     private final AxeDefinitionManager axeDefinitionManager;
     private final BroadcastService broadcastService;
     private final QuestService questService;
 
     public WoodcuttingService(Map<String, PlayerSession> sessions,
                               TreeManager treeManager,
-                              TreeDefinitionManager treeDefinitionManager,
+                              ResourceDefinitionManager resourceDefinitionManager,
                               AxeDefinitionManager axeDefinitionManager,
                               BroadcastService broadcastService,
                               QuestService questService) {
         this.sessions = sessions;
         this.treeManager = treeManager;
-        this.treeDefinitionManager = treeDefinitionManager;
+        this.resourceDefinitionManager = resourceDefinitionManager;
         this.axeDefinitionManager = axeDefinitionManager;
         this.broadcastService = broadcastService;
         this.questService = questService;
@@ -71,27 +74,28 @@ public final class WoodcuttingService {
             return;
         }
 
-        TreeDefinition treeDef = treeDefinitionManager.get(tree.definitionId);
+        ResourceDefinition resource = resourceDefinitionManager.get(tree.definitionId, SkillType.WOODCUTTING);
+        if (resource == null) {
+            sendGatherFail(session, "You can't chop that tree.");
+            return;
+        }
         int woodcuttingLevel = session.skills.getLevel(Skill.WOODCUTTING);
         if (axeDefinitionManager.getBestAvailable(session) == null) {
-            broadcastService.sendToPlayer(session.id, "SYSTEM You need an axe to chop this tree.");
-            broadcastService.sendToPlayer(session.id, "STOP_ACTION");
+            sendGatherFail(session, "You need an axe to chop this tree.");
             return;
         }
-        if (woodcuttingLevel < treeDef.levelRequired) {
-            broadcastService.sendToPlayer(session.id,
-                    "SYSTEM You need Woodcutting level " + treeDef.levelRequired + " to chop this tree.");
-            broadcastService.sendToPlayer(session.id, "STOP_ACTION");
+        if (woodcuttingLevel < resource.levelRequired) {
+            sendGatherFail(session, "You need Woodcutting level " + resource.levelRequired + " to chop this tree.");
             return;
         }
-        if (!session.inventory.hasSpace(treeDef.logItemId)) {
-            session.sendInventoryFullMessage();
-            broadcastService.sendToPlayer(session.id, "STOP_ACTION");
+        if (!session.inventory.hasSpace(resource.rewardItemId)) {
+            sendGatherFail(session, "Your inventory is full.");
             return;
         }
 
         session.activeTreeId = treeId;
         session.lastChopTime = System.currentTimeMillis();
+        broadcastService.sendToPlayer(session.id, "START_GATHERING\twoodcutting\t" + treeId);
     }
 
     public void tick(long now) {
@@ -128,8 +132,8 @@ public final class WoodcuttingService {
             return;
         }
 
-        TreeDefinition treeDef = treeDefinitionManager.get(tree.definitionId);
-        if (!session.inventory.hasSpace(treeDef.logItemId)) {
+        ResourceDefinition resource = resourceDefinitionManager.get(tree.definitionId, SkillType.WOODCUTTING);
+        if (!session.inventory.hasSpace(resource.rewardItemId)) {
             session.sendInventoryFullMessage();
             stopChopping(session, true);
             return;
@@ -138,27 +142,27 @@ public final class WoodcuttingService {
         session.lastChopTime = now;
 
         int woodcuttingLevel = session.skills.getLevel(Skill.WOODCUTTING);
-        if (!rollSuccess(treeDef, woodcuttingLevel)) {
+        if (!GatheringRolls.rollSuccess(resource, woodcuttingLevel)) {
             return;
         }
 
-        if (!session.inventory.addItem(treeDef.logItemId, 1)) {
+        if (!session.inventory.addItem(resource.rewardItemId, 1)) {
             session.sendInventoryFullMessage();
             stopChopping(session, true);
             return;
         }
 
-        session.skills.addXp(Skill.WOODCUTTING, treeDef.xp);
+        session.skills.addXp(Skill.WOODCUTTING, resource.experience);
         ClientHandler handler = session.getHandler();
         if (handler != null) {
             handler.send(session.inventory.buildSnapshot());
             handler.send(SkillService.buildSkillsPacket(session));
         }
-        questService.checkAndAdvanceGatherObjective(session, treeDef.logItemId);
-        broadcastService.sendToPlayer(session.id, "SKILL_XP woodcutting " + treeDef.xp);
+        questService.checkAndAdvanceGatherObjective(session, resource.rewardItemId);
+        broadcastService.sendToPlayer(session.id, "SKILL_XP woodcutting " + resource.experience);
 
-        if (rollDepletion(treeDef, woodcuttingLevel)
-                && treeManager.chopTree(tree.id, treeDef.respawnTimeMs)) {
+        if (GatheringRolls.rollDepletion(resource, woodcuttingLevel)
+                && treeManager.chopTree(tree.id, resource.respawnTime)) {
             broadcastTreeRemoval(tree.id, tree.x, tree.y);
             stopChoppingTree(tree.id);
         }
@@ -166,18 +170,6 @@ public final class WoodcuttingService {
 
     private long getChopDelayMs(AxeDefinition axe) {
         return Math.max(600L, Math.round(CHOP_INTERVAL_MS * axe.speedMultiplier));
-    }
-
-    private boolean rollSuccess(TreeDefinition treeDef, int woodcuttingLevel) {
-        double bonus = Math.max(0, woodcuttingLevel - treeDef.levelRequired) * 0.015;
-        double chance = clamp(treeDef.baseSuccessChance + bonus, 0.15, 0.95);
-        return ThreadLocalRandom.current().nextDouble() < chance;
-    }
-
-    private boolean rollDepletion(TreeDefinition treeDef, int woodcuttingLevel) {
-        double reduction = Math.max(0, woodcuttingLevel - treeDef.levelRequired) * 0.004;
-        double chance = clamp(treeDef.depletionChance - reduction, 0.03, 0.95);
-        return ThreadLocalRandom.current().nextDouble() < chance;
     }
 
     private void stopChoppingTree(String treeId) {
@@ -206,7 +198,8 @@ public final class WoodcuttingService {
         }
     }
 
-    private static double clamp(double value, double min, double max) {
-        return Math.max(min, Math.min(max, value));
+    private void sendGatherFail(PlayerSession session, String message) {
+        stopChopping(session, false);
+        broadcastService.sendToPlayer(session.id, "GATHER_FAIL\t" + message);
     }
 }

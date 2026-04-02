@@ -4,6 +4,6 @@
   "type": "TREE",
   "resourceItemId": 2,
   "xp": 100,
-  "respawnMs": 40000,
+  "respawnMs": 30000,
   "spriteKey": "yew_tree"
 }

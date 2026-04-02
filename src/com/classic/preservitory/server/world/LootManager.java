@@ -15,8 +15,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class LootManager {
 
-    private static final long DESPAWN_MS = 60_000L;
-    private static final long PRIVATE_MS = 30_000L;
+    private static final long PRIVATE_MS  = 60_000L;   // owner-only for 60 s
+    private static final long DESPAWN_MS  = 120_000L;  // gone after 60 s public (120 s total)
 
     private final ConcurrentHashMap<String, LootData> loot   = new ConcurrentHashMap<>();
     private final AtomicInteger                        nextId = new AtomicInteger(1);
@@ -44,6 +44,11 @@ public class LootManager {
             }
         }
         return spawned;
+    }
+
+    /** Spawn a single player-dropped item. Returns the new LootData. */
+    public LootData spawnDrop(int x, int y, int itemId, int count, String ownerId) {
+        return spawn(x, y, itemId, count, ownerId);
     }
 
     private LootData spawn(int x, int y, int itemId, int count, String ownerId) {

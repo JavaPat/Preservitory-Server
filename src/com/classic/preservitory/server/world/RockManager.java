@@ -128,11 +128,18 @@ public class RockManager {
     public boolean mineRock(String id) {
         RockData rock = allRocks.get(id);
         if (rock == null) return false;
+        ObjectDefinition def = ObjectDefinitionManager.get(rock.definitionId);
+        long respawnMs = def.respawnMs > 0 ? def.respawnMs : 8_000L;
+        return mineRock(id, respawnMs);
+    }
+
+    public boolean mineRock(String id, long respawnTimeMs) {
+        RockData rock = allRocks.get(id);
+        if (rock == null) return false;
         synchronized (rock) {
             if (!rock.alive) return false;
-            ObjectDefinition def = ObjectDefinitionManager.get(rock.definitionId);
             rock.alive       = false;
-            rock.respawnTime = def.respawnMs > 0 ? def.respawnMs : 8_000L;
+            rock.respawnTime = Math.max(1L, respawnTimeMs);
         }
         return true;
     }

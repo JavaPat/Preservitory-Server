@@ -4,6 +4,6 @@
   "type": "TREE",
   "resourceItemId": 2,
   "xp": 100,
-  "respawnMs": 30000,
+  "respawnMs": 25000,
   "spriteKey": "maple_tree"
 }

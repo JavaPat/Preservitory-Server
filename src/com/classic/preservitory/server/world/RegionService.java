@@ -30,6 +30,7 @@ public class RegionService {
     private final NPCManager     npcManager;
     private final EnemyManager   enemyManager;
     private final LootManager    lootManager;
+    private final PendingInteractionService pendingInteractionService;
     private final BroadcastService broadcastService;
     private final AtomicBoolean  playerDirty;
 
@@ -39,6 +40,7 @@ public class RegionService {
                          NPCManager npcManager,
                          EnemyManager enemyManager,
                          LootManager lootManager,
+                         PendingInteractionService pendingInteractionService,
                          BroadcastService broadcastService,
                          AtomicBoolean playerDirty) {
         this.sessions         = sessions;
@@ -47,6 +49,7 @@ public class RegionService {
         this.npcManager       = npcManager;
         this.enemyManager     = enemyManager;
         this.lootManager      = lootManager;
+        this.pendingInteractionService = pendingInteractionService;
         this.broadcastService = broadcastService;
         this.playerDirty      = playerDirty;
     }
@@ -65,6 +68,7 @@ public class RegionService {
         session.y = y;
         session.lastMoveAtMs = System.currentTimeMillis();
         playerDirty.set(true);
+        pendingInteractionService.process(session.id);
 
         RegionKey newRegion = TreeManager.getRegionForPosition(x, y);
 

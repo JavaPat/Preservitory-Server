@@ -46,6 +46,10 @@ public class PlayerEquipment {
         return slots.containsKey(slot);
     }
 
+    public boolean containsItem(int itemId) {
+        return slots.containsValue(itemId);
+    }
+
     public Map<EquipSlot, Integer> getSlots() {
         return Collections.unmodifiableMap(slots);
     }

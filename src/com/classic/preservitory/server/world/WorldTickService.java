@@ -28,6 +28,7 @@ public class WorldTickService {
     private final BroadcastService broadcastService;
     private final CombatServices combatServices;
     private final WoodcuttingService woodcuttingService;
+    private final PendingInteractionService pendingInteractionService;
     private final AtomicBoolean playerDirty;
 
     public WorldTickService(Map<String, PlayerSession> sessions,
@@ -39,6 +40,7 @@ public class WorldTickService {
                             BroadcastService broadcastService,
                             CombatServices combatServices,
                             WoodcuttingService woodcuttingService,
+                            PendingInteractionService pendingInteractionService,
                             AtomicBoolean playerDirty) {
         this.sessions = sessions;
         this.treeManager = treeManager;
@@ -49,6 +51,7 @@ public class WorldTickService {
         this.broadcastService = broadcastService;
         this.combatServices = combatServices;
         this.woodcuttingService = woodcuttingService;
+        this.pendingInteractionService = pendingInteractionService;
         this.playerDirty = playerDirty;
     }
 
@@ -67,6 +70,7 @@ public class WorldTickService {
                     }
 
                     woodcuttingService.tick(now);
+                    pendingInteractionService.processAll();
 
                     // Tick trees
                     List<TreeData> respawnedTrees = treeManager.update(deltaTimeMs);

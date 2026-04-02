@@ -4,6 +4,6 @@
   "type": "TREE",
   "resourceItemId": 2,
   "xp": 35,
-  "respawnMs": 20000,
+  "respawnMs": 15000,
   "spriteKey": "oak_tree"
 }

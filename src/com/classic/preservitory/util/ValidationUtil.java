@@ -6,8 +6,8 @@ import com.classic.preservitory.server.world.TreeManager;
 
 public class ValidationUtil {
 
-    private static final int WORLD_WIDTH_PX = 30 * TreeManager.TILE_SIZE;
-    private static final int WORLD_HEIGHT_PX = 24 * TreeManager.TILE_SIZE;
+    private static final int WORLD_WIDTH_PX = 64 * TreeManager.TILE_SIZE;
+    private static final int WORLD_HEIGHT_PX = 64 * TreeManager.TILE_SIZE;
     private static final double MAX_PLAYER_SPEED_PX_PER_SEC = 175.0D;
     private static final double MOVE_TOLERANCE_PX = 16.0D;
     private static final long MIN_MOVE_WINDOW_MS = 50L;

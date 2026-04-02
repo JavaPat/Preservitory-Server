@@ -35,11 +35,11 @@ public final class SpawnLoader {
 
     private static final String SPAWNS_DIR = "spawns";
 
-    private static final Pattern ENTRY_PATTERN  = Pattern.compile("\\{([^{}]*)\\}");
-    private static final Pattern ID_PATTERN     = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"");
+    private static final Pattern ENTRY_PATTERN = Pattern.compile("\\{([^{}]*)\\}");
+    private static final Pattern ID_PATTERN = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"");
     private static final Pattern DEF_ID_PATTERN = Pattern.compile("\"definitionId\"\\s*:\\s*(\\d+)");
-    private static final Pattern X_PATTERN      = Pattern.compile("\"x\"\\s*:\\s*(-?\\d+)");
-    private static final Pattern Y_PATTERN      = Pattern.compile("\"y\"\\s*:\\s*(-?\\d+)");
+    private static final Pattern X_PATTERN = Pattern.compile("\"x\"\\s*:\\s*(-?\\d+)");
+    private static final Pattern Y_PATTERN = Pattern.compile("\"y\"\\s*:\\s*(-?\\d+)");
 
     private SpawnLoader() {}
 
@@ -96,8 +96,8 @@ public final class SpawnLoader {
                 }
 
                 int defId = extractInt(entry, DEF_ID_PATTERN, "definitionId");
-                int x     = extractInt(entry, X_PATTERN, "x");
-                int y     = extractInt(entry, Y_PATTERN, "y");
+                int x = extractInt(entry, X_PATTERN, "x");
+                int y = extractInt(entry, Y_PATTERN, "y");
 
                 defValidator.validate(defId);
                 result.add(new SpawnEntry(spawnId, defId, x, y));

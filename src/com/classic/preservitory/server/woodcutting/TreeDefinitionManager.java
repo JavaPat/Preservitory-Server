@@ -49,11 +49,11 @@ public final class TreeDefinitionManager {
 
     private static TreeProfile profileFor(String key) {
         return switch (key) {
-            case "tree" -> new TreeProfile(1, 25, 0.60D, 1.0D, 12_000L);
-            case "oak_tree" -> new TreeProfile(15, 35, 0.45D, 0.18D, 18_000L);
-            case "willow_tree" -> new TreeProfile(30, 67, 0.55D, 0.30D, 10_000L);
-            case "maple_tree" -> new TreeProfile(45, 100, 0.45D, 0.40D, 15_000L);
-            case "yew_tree" -> new TreeProfile(60, 175, 0.35D, 0.50D, 20_000L);
+            case "tree" -> new TreeProfile(1, 25, 0.60D, 1.0D, 10_000L);
+            case "oak_tree" -> new TreeProfile(15, 35, 0.45D, 0.18D, 15_000L);
+            case "willow_tree" -> new TreeProfile(30, 67, 0.55D, 0.30D, 20_000L);
+            case "maple_tree" -> new TreeProfile(45, 100, 0.45D, 0.40D, 25_000L);
+            case "yew_tree" -> new TreeProfile(60, 175, 0.35D, 0.50D, 30_000L);
             default -> new TreeProfile(1, 25, 0.55D, 0.24D, 10_000L);
         };
     }

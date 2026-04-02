@@ -52,8 +52,8 @@ public final class EntityMovementSystem {
     public static final long   MOVE_DELAY_MAX_MS = 5_000L;
 
     private static final int   TILE_SIZE = TreeManager.TILE_SIZE;
-    private static final int   WORLD_W   = 30 * TILE_SIZE;   // 960 px
-    private static final int   WORLD_H   = 24 * TILE_SIZE;   // 768 px
+    private static final int   WORLD_W   = 64 * TILE_SIZE;   // 2048 px
+    private static final int   WORLD_H   = 64 * TILE_SIZE;   // 2048 px
 
     private final Random rng = new Random();
 

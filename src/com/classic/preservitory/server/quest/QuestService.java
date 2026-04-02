@@ -284,15 +284,18 @@ public class QuestService {
      *       The {@code '|'} character is stripped to protect the entry separator.</li>
      * </ul>
      *
-     * Entries with no matching definition are silently skipped.
+     * The quest list is sourced from {@link QuestDefinitionManager#values()} so the
+     * client always receives every defined quest. Missing player progress defaults
+     * to {@link QuestState#NOT_STARTED}.
      */
     public static String buildQuestLogPacket(PlayerSession session) {
         StringBuilder sb = new StringBuilder("QUEST_LOG\t");
         boolean first = true;
-        for (Map.Entry<Integer, QuestProgress> entry : session.quests.entrySet()) {
-            QuestDefinition def = QuestDefinitionManager.get(entry.getKey());
-            if (def == null) continue;
-            QuestProgress progress = entry.getValue();
+        for (QuestDefinition def : QuestDefinitionManager.values()) {
+            QuestProgress progress = session.quests.get(def.id);
+            if (progress == null) {
+                progress = new QuestProgress(QuestState.NOT_STARTED, 0);
+            }
 
             String stageDesc    = "";
             int    progressAmt  = 0;
@@ -315,7 +318,7 @@ public class QuestService {
             }
 
             if (!first) sb.append('|');
-            sb.append(entry.getKey())
+            sb.append(def.id)
               .append(':').append(def.name)
               .append(':').append(progress.state.name())
               .append(':').append(progress.currentStageId)

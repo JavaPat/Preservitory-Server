@@ -49,6 +49,7 @@ public class PlayerSession {
     public volatile String activeNpcId = null;
     public volatile String activeTreeId = null;
     public volatile long lastChopTime = 0L;
+    public volatile PendingInteraction pendingInteraction = null;
     public PlayerData playerData;
 
     /** Non-null while the player is in an active dialogue session. */

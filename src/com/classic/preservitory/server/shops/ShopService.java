@@ -7,6 +7,8 @@ import com.classic.preservitory.server.net.ClientHandler;
 import com.classic.preservitory.server.npc.NPCData;
 import com.classic.preservitory.server.player.PlayerSession;
 import com.classic.preservitory.server.world.NPCManager;
+import com.classic.preservitory.server.world.TreeManager;
+import com.classic.preservitory.util.ValidationUtil;
 
 import java.util.Map;
 
@@ -20,6 +22,9 @@ import java.util.Map;
  *   - Clearing shop state on close
  */
 public class ShopService {
+
+    private static final double INTERACT_RANGE_PX = TreeManager.TILE_SIZE * 1.7;
+    private static final double INTERACT_RANGE_SQ = INTERACT_RANGE_PX * INTERACT_RANGE_PX;
 
     private final Map<String, PlayerSession> sessions;
     private final ShopManager       shopManager;
@@ -100,5 +105,30 @@ public class ShopService {
         NpcDefinition definition = NpcDefinitionManager.get(npc.definitionId);
         if (definition == null || definition.shopId == null) return null;
         return shopManager.getShop(definition.shopId);
+    }
+
+    public void openShop(String playerId, String npcId) {
+        PlayerSession session = sessions.get(playerId);
+        if (session == null || !session.loggedIn || !session.isAlive()) return;
+
+        NPCData npc = npcManager.getNpc(npcId);
+        if (npc == null) return;
+        if (!ValidationUtil.isWithinEntityRange(session.x, session.y, (int) npc.x, (int) npc.y, INTERACT_RANGE_SQ)) {
+            return;
+        }
+
+        NpcDefinition definition = NpcDefinitionManager.get(npc.definitionId);
+        if (definition == null || definition.shopId == null) return;
+
+        Shop shop = shopManager.getShop(definition.shopId);
+        if (shop == null) return;
+
+        session.activeNpcId = npcId;
+        session.shopOpen = true;
+
+        ClientHandler h = session.getHandler();
+        if (h != null) {
+            h.send(shop.buildSnapshot());
+        }
     }
 }

@@ -19,6 +19,7 @@ import com.classic.preservitory.server.definitions.ObjectDefinitionManager;
 import com.classic.preservitory.server.definitions.QuestDefinitionLoader;
 import com.classic.preservitory.server.definitions.QuestDefinitionManager;
 import com.classic.preservitory.server.dialogue.DialogueService;
+import com.classic.preservitory.server.gathering.ResourceDefinitionManager;
 import com.classic.preservitory.server.moderation.ModerationSystem;
 import com.classic.preservitory.server.net.BroadcastService;
 import com.classic.preservitory.server.net.ChatService;
@@ -39,6 +40,7 @@ import com.classic.preservitory.server.world.EnemyManager;
 import com.classic.preservitory.server.world.GatheringService;
 import com.classic.preservitory.server.world.LootManager;
 import com.classic.preservitory.server.world.NPCManager;
+import com.classic.preservitory.server.world.PendingInteractionService;
 import com.classic.preservitory.server.world.RegionService;
 import com.classic.preservitory.server.world.RockManager;
 import com.classic.preservitory.server.world.TreeManager;
@@ -100,9 +102,11 @@ public class GameServer {
     private WorldTickService worldTickService;
     private QuestService     questService;
     private WoodcuttingService woodcuttingService;
+    private ResourceDefinitionManager resourceDefinitionManager;
 
     // Extracted services (previously inlined in GameServer)
     private RegionService    regionService;
+    private PendingInteractionService pendingInteractionService;
     private DialogueService  dialogueService;
     private ShopService      shopService;
     private ChatService      chatService;
@@ -155,21 +159,25 @@ public class GameServer {
         // Initialise services that depend on world managers.
         broadcastService = new BroadcastService(sessions);
         questService     = new QuestService(broadcastService);
+        resourceDefinitionManager = new ResourceDefinitionManager(new TreeDefinitionManager());
         playerService    = new PlayerService(sessions, broadcastService);
-        gatheringService = new GatheringService(sessions, treeManager, rockManager, lootManager, broadcastService, questService);
-        woodcuttingService = new WoodcuttingService(sessions, treeManager, new TreeDefinitionManager(),
+        gatheringService = new GatheringService(sessions, treeManager, rockManager, lootManager, broadcastService, questService, resourceDefinitionManager);
+        woodcuttingService = new WoodcuttingService(sessions, treeManager, resourceDefinitionManager,
                 new AxeDefinitionManager(),
                 broadcastService, questService);
         combatServices   = new CombatServices(sessions, enemyManager, lootManager, broadcastService, questService);
+        shopService      = new ShopService(sessions, shopManager, npcManager, broadcastService);
+        dialogueService  = new DialogueService(sessions, npcManager, questService, shopManager, broadcastService);
+        pendingInteractionService = new PendingInteractionService(sessions, treeManager, rockManager, npcManager,
+                enemyManager, gatheringService, woodcuttingService, combatServices, dialogueService, shopService);
         worldTickService = new WorldTickService(sessions, treeManager, rockManager, npcManager,
                                                 enemyManager, lootManager, broadcastService, combatServices,
-                                                woodcuttingService, playerDirty);
+                                                woodcuttingService, pendingInteractionService, playerDirty);
 
         // Initialise extracted services.
         regionService   = new RegionService(sessions, treeManager, rockManager, npcManager,
-                                            enemyManager, lootManager, broadcastService, playerDirty);
-        dialogueService = new DialogueService(sessions, npcManager, questService, shopManager, broadcastService);
-        shopService     = new ShopService(sessions, shopManager, npcManager, broadcastService);
+                                            enemyManager, lootManager, pendingInteractionService,
+                                            broadcastService, playerDirty);
         chatService     = new ChatService(sessions, broadcastService, commandManager, moderationSystem);
 
         registerCommands();
@@ -220,15 +228,15 @@ public class GameServer {
     }
 
     public void handleChop(String id, String treeId) {
-        woodcuttingService.startChopping(id, treeId);
+        pendingInteractionService.queueGather(id, treeId);
     }
 
     public void handleMine(String id, String rockId) {
-        gatheringService.handleMine(id, rockId);
+        pendingInteractionService.queueGather(id, rockId);
     }
 
     public void handleAttack(String id, String enemyId) {
-        combatServices.handleAttack(id, enemyId);
+        pendingInteractionService.queueAttack(id, enemyId);
     }
 
     public void handleCombatStyle(String id, String style) {
@@ -237,6 +245,10 @@ public class GameServer {
         try {
             session.combatStyle = com.classic.preservitory.server.player.CombatStyle.valueOf(style.toUpperCase());
         } catch (IllegalArgumentException ignored) {}
+    }
+
+    public void handleDrop(String id, int itemId) {
+        gatheringService.handleDrop(id, itemId);
     }
 
     public void handlePickup(String id, String lootId) {
@@ -258,6 +270,15 @@ public class GameServer {
         }
     }
 
+    public void handlePing(String id, String timestamp) {
+        PlayerSession session = sessions.get(id);
+        if (session == null) return;
+        ClientHandler handler = session.getHandler();
+        if (handler != null) {
+            handler.send("PONG:" + timestamp);
+        }
+    }
+
     public void handleRegister(String id, String username, String password) {
         if (playerService.handleRegister(id, username, password)) {
             PlayerSession session = sessions.get(id);
@@ -266,7 +287,11 @@ public class GameServer {
     }
 
     public void handleTalk(String playerId, String npcId) {
-        dialogueService.handleTalk(playerId, npcId);
+        pendingInteractionService.queueTalk(playerId, npcId);
+    }
+
+    public void clearPendingInteraction(String playerId) {
+        pendingInteractionService.clear(playerId);
     }
 
     public void handleDialogueNext(String playerId) {

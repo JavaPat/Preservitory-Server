@@ -47,18 +47,21 @@ public class PlayerService {
         data.passwordHash = PasswordUtil.hash(password);
         data.x = PlayerSession.PLAYER_SPAWN_X;
         data.y = PlayerSession.PLAYER_SPAWN_Y;
-        // Combat skills start at level 3 (OSRS convention); others at level 1.
+        // Combat skills start at level 3 except HITPOINTS, which starts at 2 (10 HP).
         int combatStartXp = com.classic.preservitory.server.player.skills.SkillSet.xpForLevel(3);
+        int hitpointsStartXp = com.classic.preservitory.server.player.skills.SkillSet.xpForLevel(2);
         for (Skill skill : Skill.values()) {
             boolean isCombat = skill == Skill.ATTACK || skill == Skill.STRENGTH
                     || skill == Skill.DEFENCE || skill == Skill.HITPOINTS;
-            data.skills.put(skill.name(), isCombat ? 3 : 1);
-            data.skillXp.put(skill.name(), isCombat ? combatStartXp : 0);
+            int startLevel = skill == Skill.HITPOINTS ? 2 : (isCombat ? 3 : 1);
+            int startXp = skill == Skill.HITPOINTS ? hitpointsStartXp : (isCombat ? combatStartXp : 0);
+            data.skills.put(skill.name(), startLevel);
+            data.skillXp.put(skill.name(), startXp);
         }
-        data.hp = 15; // level 3 HITPOINTS × 5
+        data.hp = 10; // level 2 HITPOINTS × 5
 
         PlayerSaveSystem.save(data);
-        return handleLogin(tempId, username, password);
+        return handleLogin(tempId, username, password, true);
     }
 
     // -----------------------------------------------------------------------
@@ -66,6 +69,10 @@ public class PlayerService {
     // -----------------------------------------------------------------------
 
     public boolean handleLogin(String tempId, String username, String password) {
+        return handleLogin(tempId, username, password, false);
+    }
+
+    private boolean handleLogin(String tempId, String username, String password, boolean firstLogin) {
         PlayerSession session = sessions.get(tempId);
         if (session == null) return false;
 
@@ -217,7 +224,6 @@ public class PlayerService {
             h.send(QuestService.buildQuestLogPacket(session));
         }
 
-        sendToPlayer(tempId, "Welcome back, " + username + "!");
         broadcastService.broadcastPositions();
         return true;
     }
@@ -236,6 +242,7 @@ public class PlayerService {
             session.activeDialogue = null;
             session.shopOpen       = false;
             session.activeNpcId    = null;
+            session.pendingInteraction = null;
 
             session.disconnected = true;
             session.disconnectTime = System.currentTimeMillis();
@@ -416,17 +423,6 @@ public class PlayerService {
     // -----------------------------------------------------------------------
     //  Messaging
     // -----------------------------------------------------------------------
-
-    private void sendToPlayer(String playerId, String message) {
-        PlayerSession s = sessions.get(playerId);
-
-        if (s == null) return;
-
-        ClientHandler h = s.getHandler();
-        if (h != null) {
-            broadcastService.sendToPlayer(playerId, "SYSTEM " + message);
-        }
-    }
 
     private void sendAuthFailure(String playerId, String message) {
         PlayerSession s = sessions.get(playerId);

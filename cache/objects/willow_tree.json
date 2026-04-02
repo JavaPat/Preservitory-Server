@@ -4,6 +4,6 @@
   "type": "TREE",
   "resourceItemId": 2,
   "xp": 67,
-  "respawnMs": 25000,
+  "respawnMs": 20000,
   "spriteKey": "willow_tree"
 }
